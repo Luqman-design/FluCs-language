@@ -1,33 +1,31 @@
 #include <stdio.h>
 
-enum TokenType {
+typedef enum {
     INT, IDENTIFIER, EQUAL, SEMICOLON, INT_VALUE
-};
+} TokenType;
 
-enum State {
+typedef enum {
     START, IN_INTEGER, IN_IDENTIFIER, ACCEPT
-};
+} State;
 
-typedef enum TokenType TokenType;
-
-typedef enum State State;
-
-struct Token {
+typedef struct {
     TokenType type;
     union {
         char *string_value;
         int int_value;
-    }
-    value;
-};
+    } value;
+} Token;
 
-struct Lexer {
+typedef struct {
     char *input;
     int position;
-};
+} Lexer;
 
 Lexer new_lexer(char* input) {
-    struct Lexer input = {};
+    Lexer lexer;
+    lexer.input = input;
+    lexer.position = 0;
+    return lexer;
 }
 
 /*
