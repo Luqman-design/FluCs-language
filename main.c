@@ -8,9 +8,27 @@ enum State {
     START, IN_INTEGER, IN_IDENTIFIER, ACCEPT
 };
 
-typedef enum Token Token;
+typedef enum TokenType TokenType;
 
 typedef enum State State;
+
+struct Token {
+    TokenType type;
+    union {
+        char *string_value;
+        int int_value;
+    }
+    value;
+};
+
+struct Lexer {
+    char *input;
+    int position;
+};
+
+Lexer new_lexer(char* input) {
+    struct Lexer input = {};
+}
 
 /*
  * struct:
