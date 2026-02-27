@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 typedef enum {
     INT, IDENTIFIER, EQUAL, SEMICOLON, INT_VALUE
@@ -36,7 +37,6 @@ char peek(Lexer *lexer) {
 Token next_token(Lexer lexer) {
 	State state = START;
 	char current_char = peek(&lexer);
-	lexer.position++;
 	char temp_token[64];
 	int temp_token_tracker = 0;
 
@@ -68,9 +68,34 @@ Token next_token(Lexer lexer) {
 			Token token;
 			token.type = IDENTIFIER;
 			token.value.string_value = temp_token;
+			printf("%s", temp_token);
+			return token;
+		} else if (state == START && isdigit(current_char)) { 
+			temp_token[temp_token_tracker] = current_char;
+			temp_token_tracker++;
+			lexer.position++;
+			state = IN_INTEGER;
+
+		} else if (state == IN_INTEGER && isdigit(current_char)) {
+			temp_token[temp_token_tracker] = current_char;
+			temp_token_tracker++;
+			lexer.position++;
+		} else if (state == IN_INTEGER) {
+			temp_token[temp_token_tracker] = current_char;
+			temp_token_tracker++;
+			lexer.position++;
+			
+			Token token;
+			token.type = INT_VALUE;
+			token.value.int_value = atoi(temp_token);
 			return token;
 		}
+
+		
 	}
+		Token token;
+		return token;
+
 }
 
 /*
@@ -122,6 +147,8 @@ int main() {
     printf("Hello, World!\n");
     char *str = "int x = 10;";
     printf("%s", str);
+	Lexer lexer = new_lexer(str);
+	Token token = next_token(lexer);
 
     return 0;
 }
