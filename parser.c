@@ -45,7 +45,7 @@ term ::= factor ('+' | '-' factor)*
 factor ::= int | str | identifier
 */
 
-// IntType, ... IntValue, ...
+// IntType x = IntValue;
 // int x = 10;
 
 typedef enum {
