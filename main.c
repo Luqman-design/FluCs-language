@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef enum
 {
-	INT,
+	INT, 
 	IDENTIFIER,
 	EQUAL,
 	SEMICOLON,
@@ -43,83 +44,88 @@ Lexer new_lexer(char *input)
 	return lexer;
 }
 
+// return the current character 
 char peek(Lexer *lexer)
 {
 	return lexer->input[lexer->position];
 }
 
-Token next_token(Lexer lexer)
+Token next_token(Lexer *lexer)
 {
 	State state = START;
-	char temp_token[64];
+	char temp_token[64]; 
 	int temp_token_tracker = 0;
 
 	while (state != ACCEPT)
 	{
-		char current_char = peek(&lexer);
+		char current_char = peek(lexer);
 		if (state == START && current_char == '=')
 		{
 			Token token;
 			token.type = EQUAL;
-			lexer.position++;
+			lexer->position++;
 			return token;
 		}
 		else if (state == START && current_char == ';')
 		{
 			Token token;
 			token.type = SEMICOLON;
-			lexer.position++;
+			lexer->position++;
 			return token;
 		}
 		else if (state == START && (current_char == '_' || isalpha(current_char)))
 		{
 			temp_token[temp_token_tracker] = current_char;
 			temp_token_tracker++;
-			lexer.position++;
+			lexer->position++;
 			state = IN_IDENTIFIER;
 		}
 		else if (state == IN_IDENTIFIER && (current_char == '_' || isalpha(current_char)))
 		{
 			temp_token[temp_token_tracker] = current_char;
 			temp_token_tracker++;
-			lexer.position++;
+			lexer->position++;
 		}
 		else if (state == IN_IDENTIFIER)
 		{
-			temp_token[temp_token_tracker] = current_char;
-			temp_token_tracker++;
 			temp_token[temp_token_tracker] = '\0';
-			lexer.position++;
+			lexer->position++;
 
 			Token token;
 			token.type = IDENTIFIER;
 			token.value.string_value = temp_token;
-			printf("%s\n", temp_token);
+
+			printf("Token: %s\n", temp_token);
+			
+			if (strcmp(temp_token, "int") == 0)
+			{
+				token.type = INT; 
+			}
+			printf("Token type: %d\n", token.type);
 			return token;
 		}
 		else if (state == START && isdigit(current_char))
 		{
 			temp_token[temp_token_tracker] = current_char;
 			temp_token_tracker++;
-			lexer.position++;
+			lexer->position++;
 			state = IN_INTEGER;
 		}
 		else if (state == IN_INTEGER && isdigit(current_char))
 		{
 			temp_token[temp_token_tracker] = current_char;
 			temp_token_tracker++;
-			lexer.position++;
+			lexer->position++;
 		}
 		else if (state == IN_INTEGER)
 		{
-			temp_token[temp_token_tracker] = current_char;
 			temp_token_tracker++;
 			temp_token[temp_token_tracker] = '\0';
-			lexer.position++;
+			lexer->position++;
 
 			Token token;
 			token.type = INT_VALUE;
-			token.value.int_value = atoi(temp_token);
+			token.value.int_value = atoi(temp_token); // convert string to int
 			return token;
 		}
 	}
@@ -127,58 +133,13 @@ Token next_token(Lexer lexer)
 	return token;
 }
 
-/*
- * struct:
- *    type,
- *    værdi (enten string eller int) (hint: brug union)
- *
- * struct:
- *    input (vores kode string),
- *    position (hvilket char er vi ved)
- *
- * Lexer new_lexer(char* input)
- *    Lav ny lexer of retuner den
- *
- * Token next_token(Lexer lexer)
- *    loop (stop loopet ved ACCEPT state)
- *
- *        if state is START and char == '='
- *            return Token(TokenType.EQUAL)
- *        if state is START and char == ';'
- *            return ...
- *
- *
- *        if state is START and if a-z | A-Z | _
- *            set state IN_IDENTIFIER
- *
- *        if state is IN_IDENTIFIER and if a-z | A-Z | _
- *            set state IN_IDENTIFIER
- *
- *        if state is IN_IDENTIFIER
- *            set state ACCEPT
- *
- *
- *        if state is START and if 0-9
- *            set state IN_INTEGER
- *
- *        if state is IN_INTEGER and if 0-9
- *            set state IN_INTEGER
- *
- *        if state is IN_INTEGER
- *            set state ACCEPT
- *
- *    switch på Identifier'en
- *        hvis den matcher et keyword (som 'int'),
- *              så lav den til et keyword i stedet.
- */
-
 int main()
 {
-	printf("Hello, World!\n");
 	char *str = "int x = 10;\n";
 	printf("%s", str);
 	Lexer lexer = new_lexer(str);
-	Token token = next_token(lexer);
+	Token token = next_token(&lexer);
+	Token token2 = next_token(&lexer);
 
 	return 0;
 }
