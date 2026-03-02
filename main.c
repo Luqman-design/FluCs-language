@@ -89,7 +89,6 @@ Token next_token(Lexer *lexer)
 		else if (state == IN_IDENTIFIER)
 		{
 			temp_token[temp_token_tracker] = '\0';
-			lexer->position++;
 
 			Token token;
 			token.type = IDENTIFIER;
@@ -119,7 +118,6 @@ Token next_token(Lexer *lexer)
 		}
 		else if (state == IN_INTEGER)
 		{
-			temp_token_tracker++;
 			temp_token[temp_token_tracker] = '\0';
 			lexer->position++;
 
