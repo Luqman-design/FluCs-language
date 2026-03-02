@@ -34,6 +34,7 @@ typedef struct
 {
 	char *input;
 	int position;
+	int length;
 } Lexer;
 
 Lexer new_lexer(char *input)
@@ -41,6 +42,7 @@ Lexer new_lexer(char *input)
 	Lexer lexer;
 	lexer.input = input;
 	lexer.position = 0;
+	lexer.length = strlen(input);
 	return lexer;
 }
 
@@ -56,7 +58,7 @@ Token next_token(Lexer *lexer)
 	char temp_token[64]; 
 	int temp_token_tracker = 0;
 
-	while (lexer->position < strlen(lexer->input))
+	while (lexer->position < lexer->length)
 	{
 		char current_char = peek(lexer);
 		if (state == START && current_char == '=')
@@ -135,17 +137,11 @@ int main()
 	char *str = "int x = 10;\n";
 	printf("%s", str);
 	Lexer lexer = new_lexer(str);
-	Token token = next_token(&lexer);
-	printf("Token type: %d, Token: %s\n", token.type, token.value);
-	Token token2 = next_token(&lexer);
-	printf("Token type: %d, Token: %s\n", token2.type, token2.value);
-	Token token3 = next_token(&lexer);
-	printf("Token type: %d, Token: %s\n", token3.type, token3.value);
-	Token token4 = next_token(&lexer);
-	printf("Token type: %d, Token: %d\n", token4.type, token4.value);
-	Token token5 = next_token(&lexer);
-	printf("Token type: %d, Token: %s\n", token5.type, token5.value);
-	
+
+	while (lexer.position < lexer.length - 1) {
+		Token token = next_token(&lexer);
+		printf("Token type: %d\n", token.type);
+	}
 	
 	return 0;
 }
