@@ -279,13 +279,20 @@ static Node *parse_term(Lexer *lexer)
   printf("TERM\n");
 
   Node *node = malloc(sizeof(Node));
+  Node *left_factor = parse_factor(lexer);
+  Node *right_factor;
+  Token operator = peek(lexer);
 
+  if (operator.type == PLUS || operator.type == MINUS) {
+  	consume(lexer);
+  	right_factor = parse_factor(lexer);
+  }
 
 
   node->type = NODE_BINARY_OPERATION;
-  node->body.binary_operation._operator = PLUS;
-  node->body.binary_operation.left = NULL;
-  node->body.binary_operation.right = NULL;
+  node->body.binary_operation._operator = operator.type;
+  node->body.binary_operation.left = left_factor;
+  node->body.binary_operation.right = right_factor;
   return node;
 }
 
@@ -295,13 +302,19 @@ static Node *parse_factor(Lexer *lexer)
   printf("FACTOR\n");
 
   Node *node = malloc(sizeof(Node));
+  Node *left_unary = parse_unary(lexer);
+  Node *right_unary;
+  Token operator = peek(lexer);
 
-  return parse_unary(lexer);
+  if (operator.type == MULTIPLY || operator.type == DIVIDE) {
+  	consume(lexer);
+  	right_unary = parse_unary(lexer);
+  }
 
   node->type = NODE_BINARY_OPERATION;
-  node->body.binary_operation._operator = MULTIPLY;
-  node->body.binary_operation.left = NULL;
-  node->body.binary_operation.right = NULL;
+  node->body.binary_operation._operator = operator.type;
+  node->body.binary_operation.left = left_unary;
+  node->body.binary_operation.right = right_unary;
   return node;
 }
 
@@ -311,12 +324,18 @@ static Node *parse_unary(Lexer *lexer)
   printf("UNARY\n");
 
   Node *node = malloc(sizeof(Node));
+  
+  if (peek(lexer).type == NOT) {
+	consume(lexer);
+  	node = parse_unary(lexer);
+  	node->body.unary_operation._operator = NOT;
+  } else {
+  	return parse_primary(lexer);
+  }
 
-  return parse_primary(lexer);
 
   node->type = NODE_UNARY_OPERATION;
-  node->body.unary_operation._operator = NOT;
-  node->body.unary_operation.operand = NULL;
+  node->body.unary_operation.operand = node;
   return node;
 }
 
