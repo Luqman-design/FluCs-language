@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 int main() {
-  char *str = "int x = 10;\n";
+  char *str = "10 && 5\n";
   printf("Input: %s", str);
   Lexer lexer = new_lexer(str);
 
