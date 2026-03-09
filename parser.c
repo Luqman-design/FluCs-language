@@ -64,7 +64,7 @@ static Token peek(Lexer *lexer) {
 static Node *parse_statement(Lexer *lexer);
 static Node *parse_if_statement(Lexer *lexer);
 static Node *parse_print(Lexer *lexer);
-static Node *parse_var_declaration(Lexer *lexer, TokenType var_type);
+static Node *parse_var_declaration(Lexer *lexer);
 static Node *parse_block(Lexer *lexer);
 static Node *parse_expression(Lexer *lexer);
 static Node *parse_comparison(Lexer *lexer);
@@ -92,7 +92,10 @@ static Node *parse_statement(Lexer *lexer) {
   Token token = peek(lexer);
   if (token.type == PRINT) {
     Node *node = parse_print(lexer);
-    node->type = NODE_PRINT;
+  } else if (token.type == IF) {
+    Node *node = parse_if_statement(lexer);
+  } else if (token.type == INT_TYPE || token.type == STRING_TYPE) {
+    Node *node = parse_var_declaration(lexer);
   }
 
   return node;
@@ -104,6 +107,8 @@ static Node *parse_statement(Lexer *lexer) {
 static Node *parse_if_statement(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_IF_STATEMENT;
+
+  
   node->body.if_statement.condition = NULL;
   node->body.if_statement.then_block.statements = NULL;
   node->body.if_statement.then_block.count = 0;
@@ -137,12 +142,37 @@ static Node *parse_print(Lexer *lexer) {
 }
 
 // VarDeclaration ::= ("int" | "string") IDENTIFIER "=" expression ";"
-static Node *parse_var_declaration(Lexer *lexer, TokenType var_type) {
+static Node *parse_var_declaration(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_VAR_DECLARATION;
-  node->body.var_declaration.var_type = var_type;
-  node->body.var_declaration.name = "placeholder";
-  node->body.var_declaration.value = NULL;
+  // node->body.var_declaration.var_type = var_type;
+
+  Token token = consume(lexer); // Int / String
+
+  if (token.type == INT_TYPE) {
+    node->body.var_declaration.var_type = INT_TYPE;
+  } else if (token.type == STRING_TYPE) {
+    node->body.var_declaration.var_type = STRING_TYPE;
+  }
+
+  Token varName = consume(lexer); // Variable name
+  consume(lexer); // =
+  Node *expression = parse_expression(lexer);
+  consume(lexer); // ;
+
+  node->body.var_declaration.name = varName.value.string_value;
+  node->body.var_declaration.value = expression;
+
+  printf("%d %s = ", node->body.var_declaration.var_type, node->body.var_declaration.name);
+
+
+  if (expression->type == NODE_INT_VALUE) {
+    printf("%d;\n", node->body.var_declaration.value->body.int_value.value);
+  } else if (expression->type == NODE_STRING_VALUE) {
+    printf("%s;\n", node->body.var_declaration.value->body.string_value.value);
+  } else if (expression->type == NODE_IDENTIFIER) {
+    printf("%s;\n", node->body.var_declaration.value->body.string_value.value);
+  } 
   return node;
 }
 
@@ -150,8 +180,25 @@ static Node *parse_var_declaration(Lexer *lexer, TokenType var_type) {
 static Node *parse_block(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_BLOCK;
-  node->body.block.statements = NULL;
-  node->body.block.count = 0;
+
+  int amount_of_stm = 0;
+  int stm_capacity = 3;
+  consume(lexer); // {
+  Node *statements[]= malloc(sizeof(Node)*stm_capacity);
+  while (peek(lexer).type != RIGHT_CURLYBRACKET) {
+    if (amount_of_stm >= stm_capacity) {
+      stm_capacity *= 2;
+      *statements = realloc(statements,sizeof(Node)*stm_capacity);
+    }
+    Node *statement = parse_statement(lexer);
+    statements[amount_of_stm] = statement;
+    amount_of_stm++;
+  }
+  consume(lexer); // }
+
+  node->body.block.statements = statements;
+  node->body.block.count = amount_of_stm;
+
   return node;
 }
 
