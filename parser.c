@@ -1,3 +1,17 @@
+/**
+ * @file parser.c
+ * @brief Top-Down Recursive descent parser for FluCs language.
+ *
+ * The parser takes a sequence of tokens from the lexer and builds an
+ * Abstract Syntax Tree (AST). It uses recursive descent parsing with
+ * precedence climbing for expressions. The grammar supports:
+ * - Variable declarations (int/string)
+ * - If/else statements (including else-if chains)
+ * - Print statements
+ * - Arithmetic, comparison, and logical operators
+ * - Parenthesized expressions
+ */
+
 #include "parser.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,9 +66,21 @@ unary ::= "!" unary | primary
 
 primary ::= TOKEN_INT_VALUE | TOKEN_STRING_VALUE | TOKEN_IDENTIFIER | "("
 expression ")"
-*/
+ */
 
+/**
+ * Consumes and returns the next token, advancing the lexer position.
+ * @param lexer Pointer to the lexer instance
+ * @return The next token from the input
+ */
 static Token consume(Lexer *lexer) { return next_token(lexer); }
+
+/**
+ * Returns the next token without advancing the lexer position (lookahead).
+ * Creates a copy of the lexer to preserve the original position.
+ * @param lexer Pointer to the lexer instance
+ * @return The next token (without consuming it)
+ */
 static Token peek(Lexer *lexer) {
   Lexer copy = *lexer;
   return next_token(&copy);
@@ -72,6 +98,12 @@ static Node *parse_factor(Lexer *lexer);
 static Node *parse_unary(Lexer *lexer);
 static Node *parse_primary(Lexer *lexer);
 
+/**
+ * Parses the entire program as a sequence of statements.
+ * Continues parsing statements until end of input or illegal token.
+ * @param lexer Pointer to the lexer instance
+ * @return A NODE_PROGRAM node containing all parsed statements
+ */
 // Program ::= statement*
 Node *parse(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
@@ -100,6 +132,12 @@ Node *parse(Lexer *lexer) {
   return node;
 }
 
+/**
+ * Parses a single statement by looking ahead to determine the statement type.
+ * Dispatches to the appropriate statement parser based on the next token.
+ * @param lexer Pointer to the lexer instance
+ * @return A Node representing the parsed statement
+ */
 // statement ::= IfStatement | Print | VarDeclaration
 static Node *parse_statement(Lexer *lexer) {
   Token token = peek(lexer);
@@ -116,6 +154,13 @@ static Node *parse_statement(Lexer *lexer) {
   exit(1);
 }
 
+/**
+ * Parses an if statement including optional else branch.
+ * Supports else-if chains by recursively parsing else-if as an IfStatement.
+ * @param lexer Pointer to the lexer instance
+ * @return A NODE_IF_STATEMENT node with condition, then_branch, and optional
+ * else_branch
+ */
 // IfStatement ::= "if" "(" expression ")" "{" statement* "}"
 //      | "if" "(" expression ")" "{" statement* "}" "else" "{" statement* "}"
 //      | "if" "(" expression ")" "{" statement* "}" "else" IfStatement
@@ -148,6 +193,11 @@ static Node *parse_if_statement(Lexer *lexer) {
   return node;
 }
 
+/**
+ * Parses a print statement: print(expression);
+ * @param lexer Pointer to the lexer instance
+ * @return A NODE_PRINT node containing the expression to print
+ */
 // Print ::= "print" "(" expression ")" ";"
 static Node *parse_print(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
@@ -162,6 +212,12 @@ static Node *parse_print(Lexer *lexer) {
   return node;
 }
 
+/**
+ * Parses a variable declaration: type name = expression;
+ * Supports both int and string types.
+ * @param lexer Pointer to the lexer instance
+ * @return A NODE_VAR_DECLARATION node with type, name, and value
+ */
 // VarDeclaration ::= ("int" | "string") IDENTIFIER "=" expression ";"
 static Node *parse_var_declaration(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
@@ -186,6 +242,11 @@ static Node *parse_var_declaration(Lexer *lexer) {
   return node;
 }
 
+/**
+ * Parses a block of statements enclosed in curly braces { }.
+ * @param lexer Pointer to the lexer instance
+ * @return A NODE_BLOCK node containing the statements within the block
+ */
 // Block ::= "{" statement* "}"
 static Node *parse_block(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
@@ -212,6 +273,13 @@ static Node *parse_block(Lexer *lexer) {
   return node;
 }
 
+/**
+ * Parses logical expressions (&&, ||).
+ * Handles left-associative binary operations.
+ * @param lexer Pointer to the lexer instance
+ * @return A Node representing the expression (binary operation or single
+ * operand)
+ */
 // expression ::= comparison (("&&" | "||") comparison)*
 static Node *parse_expression(Lexer *lexer) {
   Node *left_operand = parse_comparison(lexer);
@@ -231,6 +299,12 @@ static Node *parse_expression(Lexer *lexer) {
   return left_operand;
 }
 
+/**
+ * Parses comparison expressions (==, !=, <, >, <=, >=).
+ * Handles left-associative binary operations.
+ * @param lexer Pointer to the lexer instance
+ * @return A Node representing the comparison expression
+ */
 // comparison ::= term (("==" | "!=" | "<" | ">" | "<=" | ">=") term)*
 static Node *parse_comparison(Lexer *lexer) {
   Node *left_operand = parse_term(lexer);
@@ -258,6 +332,12 @@ static Node *parse_comparison(Lexer *lexer) {
   return left_operand;
 }
 
+/**
+ * Parses arithmetic terms (+, -).
+ * Handles left-associative binary operations.
+ * @param lexer Pointer to the lexer instance
+ * @return A Node representing the term expression
+ */
 // term ::= factor (("+" | "-") factor)*
 static Node *parse_term(Lexer *lexer) {
   Node *left_operand = parse_factor(lexer);
@@ -277,6 +357,12 @@ static Node *parse_term(Lexer *lexer) {
   return left_operand;
 }
 
+/**
+ * Parses factors (*, /).
+ * Handles left-associative binary operations.
+ * @param lexer Pointer to the lexer instance
+ * @return A Node representing the factor expression
+ */
 // factor ::= unary (("*" | "/") unary)*
 static Node *parse_factor(Lexer *lexer) {
   Node *left_operand = parse_unary(lexer);
@@ -297,6 +383,12 @@ static Node *parse_factor(Lexer *lexer) {
   return left_operand;
 }
 
+/**
+ * Parses unary expressions (! operator).
+ * Handles right-associative unary operations recursively.
+ * @param lexer Pointer to the lexer instance
+ * @return A Node representing the unary expression
+ */
 // unary ::= "!" unary | primary
 static Node *parse_unary(Lexer *lexer) {
   if (peek(lexer).type == TOKEN_NOT) {
@@ -312,6 +404,12 @@ static Node *parse_unary(Lexer *lexer) {
   return parse_primary(lexer);
 }
 
+/**
+ * Parses primary values: integers, strings, identifiers, and parenthesized
+ * expressions. This is the base case for the expression parsing recursion.
+ * @param lexer Pointer to the lexer instance
+ * @return A Node representing the primary value
+ */
 // primary ::= TOKEN_INT_VALUE | TOKEN_STRING_VALUE | TOKEN_IDENTIFIER | "("
 // expression ")"
 static Node *parse_primary(Lexer *lexer) {

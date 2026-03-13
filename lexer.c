@@ -1,9 +1,24 @@
+/**
+ * @file lexer.c
+ * @brief Lexical analyzer (tokenizer) for FluCs language.
+ *
+ * The lexer takes raw source code as input and converts it into a sequence
+ * of tokens. It uses a finite state machine approach to recognize different
+ * token types including identifiers, keywords, operators, integers, strings,
+ * and punctuation symbols.
+ */
+
 #include "lexer.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * Creates a new lexer instance with the given source code input.
+ * @param input The source code string to tokenize
+ * @return A Lexer structure initialized with the input
+ */
 Lexer new_lexer(char *input) {
   Lexer lexer;
   lexer.input = input;
@@ -12,8 +27,21 @@ Lexer new_lexer(char *input) {
   return lexer;
 }
 
+/**
+ * Peeks at the current character without advancing the lexer position.
+ * @param lexer Pointer to the lexer instance
+ * @return The current character at the lexer position
+ */
 static char peek(Lexer *lexer) { return lexer->input[lexer->position]; }
 
+/**
+ * Returns the next token from the input stream and advances the position.
+ * This function implements a state machine that transitions between states
+ * to recognize different token types: identifiers/keywords, operators,
+ * integers, strings, and punctuation.
+ * @param lexer Pointer to the lexer instance
+ * @return The next Token from the input
+ */
 Token next_token(Lexer *lexer) {
   LexerState state = STATE_START;
   char current_token_buffer[64];
