@@ -52,39 +52,130 @@ function codegen {
 
 */
 
-
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
 #include "lexer.h"
 #include "parser.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-void emit_statement(Node *node, char **output) {
-	
+void add_to_output(int *current_output_position, int *output_length,
+                   char **output, char *string_to_add) {
+
+  if (strlen(string_to_add) + *current_output_position > *output_length) {
+    *output_length *= 2; // 30 -> 60 -> 120, etc
+    *output = realloc(*output, (*output_length + 1) * sizeof(char));
+  }
+
+  strcpy(*output + *current_output_position, string_to_add);
+  *current_output_position += strlen(string_to_add);
 }
 
-void emit_program(Node *node, char **output, int *output_length) {
-	if (node.type == NODE_PROGRAM) {
-		char *tmp += "#include <stdlib.h>\
-				   int main() {\0";
-		
-	    if (strlen(tmp) + strlen(output) > output_length) {
-	    	
-	    }
-	}
-	
+void emit_statement(Node *node, char **output, int *output_length,
+                    int *current_output_position) {
+  if (node->type == NODE_IF_STATEMENT) {
+  }
+}
+
+void emit_program(Node *node, char **output, int *output_length,
+                  int *current_output_position) {
+
+  /* type: NODE_PROGRAM
+     body: struct {
+       struct Node **statements;
+       int statement_count;
+     } program;
+  */
+  if (node->type == NODE_PROGRAM) {
+    add_to_output(current_output_position, output_length, output,
+                  "#include <stdlib.h> \
+                   int main() {");
+
+    // For each statement in Program
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      emit_statement(node->body.program.statements[i], output, output_length,
+                     current_output_position);
+    }
+
+    add_to_output(current_output_position, output_length, output, "return 0;}");
+  }
 }
 
 int main() {
   char *str = "if(a < b){print(x);}\n";
-  int *output_length = 30;
-  char *output = (char *) malloc((output_length + 1) * sizeof(char));
+  int output_length = 30;
+  int current_output_position = 0;
+  char *output = (char *)malloc((output_length + 1) * sizeof(char));
 
   Lexer lexer = new_lexer(str);
 
   Node *root = parse(&lexer);
 
-  emit_program(root, &output, &output_length);
+  emit_program(root, &output, &output_length, &current_output_position);
 
   return 0;
 }
+
+/* Example Paser:
+Input: [TOKEN_INT_TYPE, TOKEN_IDENTIFIER, TOKEN_EQUAL, TOKEN_STRING_VALUE,
+TOKEN_SEMICOLON]
+
+Output:
+Program(
+    VarDeclaration(
+        name: x
+        type: string
+        value: "abc"
+    )
+    Print(
+        "Hello World!"
+    )
+    IfStatement(
+        condition: 5 > 4
+        Block(
+            Print(
+                "Hello again."
+            )
+        )
+    )
+)
+*/
+
+/*
+
+## Frontend:
+
+Input:
+if a < b
+  print(x)
+
+Lexer output:
+'if', 'a', '<', 'b'
+
+Parser output (AST):
+IfStatement
+  condition: a < b
+  then_block:
+      PrintStatement
+          Expression
+            value: x
+
+Semantic analyzer:
+Example:
+int x = 10;
+x = "abc"; // Error;
+
+
+## Backend
+
+CodeGen:
+
+To C:
+if a < b ==> if (a < b) ==> run c compiler ==> LLVM (IR) ==> x86 ASM ==>
+010101011101001
+
+print(x) ==> printf("%s", x) ==> run c compiler ==> 01010010010
+
+To x86:
+if a < b ==> [a], rax; cmp rax, [b]; jl; ==> run assembler ==> 01010010101
+
+*/
