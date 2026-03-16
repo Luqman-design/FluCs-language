@@ -1,1 +1,3 @@
-#include <stdlib.h>                    int main() {if ((2<3)){printf(69);}return 0;}
+#include <stdlib.h> 
+                   #include <stdio.h> 
+                   int main() {if ((2<3)){printf("%d",69);}return 0;}

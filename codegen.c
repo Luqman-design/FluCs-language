@@ -61,12 +61,14 @@ function codegen {
 void emit_statement(Node *node, char **output, int *output_length,
                     int *current_output_position);
 
-
 void add_to_output(int *current_output_position, int *output_length,
                    char **output, char *string_to_add) {
 
-  if (strlen(string_to_add) + *current_output_position > *output_length) {
-    *output_length *= 2; // 30 -> 60 -> 120, etc
+  int needed = strlen(string_to_add) + *current_output_position;
+  if (needed > *output_length) {
+    while (*output_length < needed) {
+      *output_length *= 2;
+    }
     *output = realloc(*output, (*output_length + 1) * sizeof(char));
   }
 
@@ -78,7 +80,8 @@ void emit_binary_operation(Node *node, char **output, int *output_length,
                            int *current_output_position) {
   add_to_output(current_output_position, output_length, output, "(");
   if (node->body.binary_operation.left_operand->type == NODE_BINARY_OPERATION) {
-    emit_binary_operation(node, output, output_length, current_output_position);
+    emit_binary_operation(node->body.binary_operation.left_operand, output,
+                          output_length, current_output_position);
   } else if (node->body.binary_operation.left_operand->type == NODE_INT_VALUE) {
     char buffer[20];
     snprintf(buffer, sizeof(buffer), "%d",
@@ -125,13 +128,14 @@ void emit_binary_operation(Node *node, char **output, int *output_length,
     add_to_output(current_output_position, output_length, output, "/");
     break;
   default:
-  	perror("Erorr occurred");
+    perror("Erorr occurred");
     break;
   }
 
   if (node->body.binary_operation.right_operand->type ==
       NODE_BINARY_OPERATION) {
-    emit_binary_operation(node, output, output_length, current_output_position);
+    emit_binary_operation(node->body.binary_operation.right_operand, output,
+                          output_length, current_output_position);
   } else if (node->body.binary_operation.right_operand->type ==
              NODE_INT_VALUE) {
     char buffer[20];
@@ -144,11 +148,12 @@ void emit_binary_operation(Node *node, char **output, int *output_length,
   add_to_output(current_output_position, output_length, output, ")");
 }
 
-void emit_block(Node *node, char **output, int *output_length, int *current_output_position) {
-	    for (int i = 0; i < node->body.block.statement_count; i++) {
-	    	      emit_statement(node->body.block.statements[i], output, output_length,
-	    	                           current_output_position);
-	    }
+void emit_block(Node *node, char **output, int *output_length,
+                int *current_output_position) {
+  for (int i = 0; i < node->body.block.statement_count; i++) {
+    emit_statement(node->body.block.statements[i], output, output_length,
+                   current_output_position);
+  }
 }
 
 void emit_statement(Node *node, char **output, int *output_length,
@@ -160,21 +165,23 @@ void emit_statement(Node *node, char **output, int *output_length,
                           output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, "){");
 
-	emit_block(node->body.if_statement.then_branch, output, output_length, current_output_position);
+    emit_block(node->body.if_statement.then_branch, output, output_length,
+               current_output_position);
 
-	
     add_to_output(current_output_position, output_length, output, "}");
-  } else if (node->type == NODE_PRINT) {
-  	add_to_output(current_output_position, output_length, output, "printf(");
 
-  	if (node->body.print.print_value->type == NODE_INT_VALUE) {
-  		char buffer[20];
-  		    snprintf(buffer, sizeof(buffer), "%d",
-  		                 node->body.print.print_value->body.int_value.value);
-  		                 
-  		add_to_output(current_output_position, output_length, output, buffer);
-  		add_to_output(current_output_position, output_length, output, ");");
-  	}
+  } else if (node->type == NODE_PRINT) {
+    add_to_output(current_output_position, output_length, output,
+                  "printf(\"%d\",");
+
+    if (node->body.print.print_value->type == NODE_INT_VALUE) {
+      char buffer[20];
+      snprintf(buffer, sizeof(buffer), "%d",
+               node->body.print.print_value->body.int_value.value);
+
+      add_to_output(current_output_position, output_length, output, buffer);
+      add_to_output(current_output_position, output_length, output, ");");
+    }
   }
 }
 
@@ -212,25 +219,24 @@ int main() {
   Lexer lexer = new_lexer(str);
 
   Node *root = parse(&lexer);
-  printf("Statements: %d\n", root->body.program.statement_count);
 
   emit_program(root, &output, &output_length, &current_output_position);
 
   printf("\nResult:\n%s\n", output);
 
   FILE *f = fopen("temp.c", "w");
-  	if (!f) {
-  		perror("fopen");
-  		return 1;
-  	}
+  if (!f) {
+    perror("fopen");
+    return 1;
+  }
 
-  fputs (output, f);
+  fputs(output, f);
   fclose(f);
 
   free(output);
-	
+
   system("gcc temp.c -o temp.exe");
-  system("temp.exe");
+  system("./temp.exe");
 
   return 0;
 }
