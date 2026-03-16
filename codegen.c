@@ -2,7 +2,7 @@
 
 /*
 
-function emit_statement(Nodem output) {
+function emit_statement(Node, output) {
     if Node == IfStatement {
         output += "
         if (Node.expression) {
@@ -51,3 +51,40 @@ function codegen {
 }
 
 */
+
+
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "lexer.h"
+#include "parser.h"
+
+void emit_statement(Node *node, char **output) {
+	
+}
+
+void emit_program(Node *node, char **output, int *output_length) {
+	if (node.type == NODE_PROGRAM) {
+		char *tmp += "#include <stdlib.h>\
+				   int main() {\0";
+		
+	    if (strlen(tmp) + strlen(output) > output_length) {
+	    	
+	    }
+	}
+	
+}
+
+int main() {
+  char *str = "if(a < b){print(x);}\n";
+  int *output_length = 30;
+  char *output = (char *) malloc((output_length + 1) * sizeof(char));
+
+  Lexer lexer = new_lexer(str);
+
+  Node *root = parse(&lexer);
+
+  emit_program(root, &output, &output_length);
+
+  return 0;
+}
