@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "uthash.h"
 
 /*
 Case 1:
@@ -17,7 +18,7 @@ Case 2:
 string a,
 string b,
 if {
-  int a,
+  int a
   a = 10
   b = "gg"
 }
@@ -53,31 +54,65 @@ steps:
 ]
 
 */
+#define MAX_SCOPE 100
 
 typedef struct {
+  char name[32];
   TokenType type;
-  char[32] name;
-} variable;
+  UT_hash_handle hh;
+} VariableEntry;
 
-typedef struct {
-  char key[32];
-  variable *variable;
-  UT_hash_handle hash_handle;
-} declaration;
+VariableEntry *states[MAX_SCOPE];
+int state_top = -1;
 
-void semantic_analysis(Node *root) {
-  int n = 2;
-  declaration **map = calloc(n, sizeof(declaration));
-
-  for (int i = 0; i < node->body.program.statement_count; i++) {
-  }
-
-  free(variables);
-
-  return;
+void enter_state() {
+  state_top++;
+  states[state_top] = NULL;
 }
 
-/* One struct = one hashmap entry /
+void exit_state()
+{
+  VariableEntry *current, *tmp;
+
+  HASH_ITER(hh, states[state_top], current, tmp)
+  {
+    HASH_DEL(states[state_top], current);
+    free(current);
+  }
+
+  state_top--;
+}
+
+void insert_variable(const char *name, TokenType type) {
+ 
+  VariableEntry *v;
+  HASH_FIND_STR(states[state_top], name, v);
+
+  if (v != NULL) {
+    printf("Semantic error: Variable %s is already declared", name);
+    exit(1);
+  }
+  v = malloc(sizeof(VariableEntry));
+  strcopy(v->name, name);
+  v->type = type;
+
+  HASH_ADD_STR(states[state_top], name, v);
+}
+
+VariableEntry *lookup_variable(const char *name) {
+  // Loops through each state, starting from the leaf/top
+  for (int i = state_top; i >= 0; i--) {
+    VariableEntry *v;
+    HASH_FIND_STR(states[i], name, v);
+      if (v)
+      return v;
+  }
+
+  return NULL;
+}
+
+
+/* One struct = one hashmap entry
 typedef struct {
     char key[32];
     int  value;
@@ -108,3 +143,5 @@ int main(void) {
 
     return 0;
 }
+
+*/
