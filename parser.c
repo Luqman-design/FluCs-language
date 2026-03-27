@@ -429,7 +429,7 @@ static Node *parse_primary(Lexer *lexer) {
     Node *node = malloc(sizeof(Node));
     node->type = NODE_IDENTIFIER;
     node->body.identifier.name = token.value.string_value;
-    // node->body.identifier.type = 
+    // The actual variable type will be assigned in the semantic analyzer
     return node;
   } else if (token.type == TOKEN_LEFT_PAREN) {
     Node *expression = parse_expression(lexer);
