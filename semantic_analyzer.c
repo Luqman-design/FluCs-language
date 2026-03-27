@@ -56,22 +56,24 @@ steps:
 */
 #define MAX_SCOPE 100
 
+TokenType analyze_expression(Node *node);
+
 typedef struct {
   char name[32];
   TokenType type;
   UT_hash_handle hh;
 } VariableEntry;
 
-int check_operators(char[256] error_message) {
-  Node left_operand =
+int check_operators(Node *node, char *error_message) {
+  TokenType left_operand =
       analyze_expression(node->body.binary_operation.left_operand);
-  Node right_operand =
+  TokenType right_operand =
       analyze_expression(node->body.binary_operation.right_operand);
 
   if (left_operand != NODE_INT_VALUE &&
       right_operand != NODE_INT_VALUE) { // Ved ikke om dette virke for hvis det
-                                         // er en identifier?? Ex. int x, y =
-                                         // 10; x + y; (fejl måske????)
+    // er en identifier?? Ex. int x, y =
+    // 10; x + y; (fejl måske????)
     printf(error_message);
     exit(1);
   }
@@ -97,7 +99,6 @@ void exit_scope() {
 }
 
 void insert_variable(const char *name, TokenType type) {
-
   VariableEntry *variable;
   HASH_FIND_STR(scopes[scope_top], name, variable);
 
@@ -153,53 +154,59 @@ TokenType analyze_expression(Node *node) {
     switch (node->body.binary_operation.operator_type) {
     case TOKEN_PLUS:
       check_operators(
+          node,
           "Semantic error: Arithmetic operations only allowed for type int\n");
     case TOKEN_MINUS:
       check_operators(
+          node,
           "Semantic error: Arithmetic operations only allowed for type int\n");
     case TOKEN_MULTIPLY:
       check_operators(
+          node,
           "Semantic error: Arithmetic operations only allowed for type int\n");
     case TOKEN_DIVIDE:
       check_operators(
+          node,
           "Semantic error: Arithmetic operations only allowed for type int\n");
     case TOKEN_GREATER_EQUAL:
       check_operators(
-          "Semantic error: comparisons only allowed for type int\n");
+          node, "Semantic error: comparisons only allowed for type int\n");
     case TOKEN_LESS_EQUAL:
       check_operators(
-          "Semantic error: comparisons only allowed for type int\n");
+          node, "Semantic error: comparisons only allowed for type int\n");
     case TOKEN_GREATER:
       check_operators(
-          "Semantic error: comparisons only allowed for type int\n");
+          node, "Semantic error: comparisons only allowed for type int\n");
     case TOKEN_LESS:
       check_operators(
-          "Semantic error: comparisons only allowed for type int\n");
+          node, "Semantic error: comparisons only allowed for type int\n");
     case TOKEN_EQUAL_EQUAL:
-      Node left_operand =
+      TokenType left_operand =
           analyze_expression(node->body.binary_operation.left_operand);
-      Node right_operand =
+      TokenType right_operand =
           analyze_expression(node->body.binary_operation.right_operand);
 
-      if (left_operand->type != right_operand->type) {
+      if (left_operand != right_operand) {
         printf("Semantic error: equality operations must be on same type \n");
         exit(1);
       }
     case TOKEN_NOT_EQUAL:
-      Node left_operand =
+      left_operand =
           analyze_expression(node->body.binary_operation.left_operand);
-      Node right_operand =
+      right_operand =
           analyze_expression(node->body.binary_operation.right_operand);
 
-      if (left_operand->type != right_operand->type) {
+      if (left_operand != right_operand) {
         printf("Semantic error: equality operations must be on same type \n");
         exit(1);
       }
     case TOKEN_AND:
-      check_operators("Semantic error: logical operations only valid for type "
+      check_operators(node,
+                      "Semantic error: logical operations only valid for type "
                       "int on type int\n");
     case TOKEN_OR:
-      check_operators("Semantic error: logical operations only valid for type "
+      check_operators(node,
+                      "Semantic error: logical operations only valid for type "
                       "int on type int\n");
     }
   case NODE_UNARY_OPERATION: {
@@ -216,83 +223,84 @@ TokenType analyze_expression(Node *node) {
     exit(1);
   }
   }
+}
 
-  void analyze_node(Node * node) {
-    switch (node->type) {
-    case NODE_PROGRAM:
-      enter_scope();
-      for (int i = 0; i < node->body.program.statement_count; i++) {
-        analyze_node(node->body.program.statements[i]);
-      }
-      exit_scope();
-      break;
-    case NODE_BLOCK:
-      enter_scope();
-      for (int i = 0; i < node->body.block.statement_count; i++) {
-        analyze_node(node->body.block.statements[i]);
-      }
-      exit_scope();
-      break;
-    case NODE_VAR_DECLARATION: {
-      TokenType variable_type = node->body.var_declaration.variable_type;
-      char *variable_name = node->body.var_declaration.variable_name;
-      TokenType expression_type =
-          analyze_expression(node->body.var_declaration.variable_value);
-
-      insert_variable(variable_name, variable_type);
-
-      if (expression_type != variable_type) {
-        printf("Semantic error: Type mismatch in assignment to %s\n",
-               variable_name);
-        exit(1);
-      }
-      break;
+void analyze_node(Node *node) {
+  switch (node->type) {
+  case NODE_PROGRAM:
+    enter_scope();
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      analyze_node(node->body.program.statements[i]);
     }
-    case NODE_IF_STATEMENT: {
-      TokenType condition_type =
-          analyze_expression(node->body.if_statement.condition);
-
-      if (condition_type != TOKEN_INT_TYPE) {
-        printf("Semantic error: if condition must be integer\n");
-        exit(1);
-      }
-      analyze_node(node->body.if_statement.then_branch);
-      if (node->body.if_statement.else_branch) {
-        analyze_node(node->body.if_statement.else_branch);
-      }
-      break;
+    exit_scope();
+    break;
+  case NODE_BLOCK:
+    enter_scope();
+    for (int i = 0; i < node->body.block.statement_count; i++) {
+      analyze_node(node->body.block.statements[i]);
     }
-    case NODE_PRINT:
-      analyze_expression(node->body.print.print_value);
-      break;
-    default:
-      printf("Semantic error: Unsupported node type in semantic analysis\n");
+    exit_scope();
+    break;
+  case NODE_VAR_DECLARATION: {
+    TokenType variable_type = node->body.var_declaration.variable_type;
+    char *variable_name = node->body.var_declaration.variable_name;
+    TokenType expression_type =
+        analyze_expression(node->body.var_declaration.variable_value);
+
+    insert_variable(variable_name, variable_type);
+
+    if (expression_type != variable_type) {
+      printf("Semantic error: Type mismatch in assignment to %s\n",
+             variable_name);
       exit(1);
     }
+    break;
   }
+  case NODE_IF_STATEMENT: {
+    TokenType condition_type =
+        analyze_expression(node->body.if_statement.condition);
 
-  void semantic_analysis(Node * root) { analyze_node(root); }
+    if (condition_type != TOKEN_INT_TYPE) {
+      printf("Semantic error: if condition must be integer\n");
+      exit(1);
+    }
+    analyze_node(node->body.if_statement.then_branch);
+    if (node->body.if_statement.else_branch) {
+      analyze_node(node->body.if_statement.else_branch);
+    }
+    break;
+  }
+  case NODE_PRINT:
+    analyze_expression(node->body.print.print_value);
+    break;
+  default:
+    printf("Semantic error: Unsupported node type in semantic analysis\n");
+    exit(1);
+  }
+}
 
-  /*
-    TO DO:
-    Lige så compare den bare: left_type == right_type.
+void semantic_analysis(Node *root) { analyze_node(root); }
 
-    Vi skal tjekke operator type og så tjekke at det er de rigtige typer for den
-    operator. F.eks.:
+/*
+  TO DO:
+  Lige så compare den bare: left_type == right_type.
 
-    1. Arithmetic (+, -, *, /)
-       Kun integers tilladt
-       Return type: int
+  Vi skal tjekke operator type og så tjekke at det er de rigtige typer for den
+  operator. F.eks.:
 
-    2. Comparison (<, >, <=, >=)
-       Kun integers tilladt
-       Return type: int (bruger int, da vi ikke har boolean)
+  1. Arithmetic (+, -, *, /)
+     Kun integers tilladt
+     Return type: int
 
-    3. Equality (==, !=)
-       Egens typer (int == int, string == string)
-       Return type: int
+  2. Comparison (<, >, <=, >=)
+     Kun integers tilladt
+     Return type: int (bruger int, da vi ikke har boolean)
 
-    4. Logical (&&, ||)
-       Kun integers tilladt
-       Return type: int
-  */
+  3. Equality (==, !=)
+     Egens typer (int == int, string == string)
+     Return type: int
+
+  4. Logical (&&, ||)
+     Kun integers tilladt
+     Return type: int
+*/
