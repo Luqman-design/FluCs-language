@@ -1,3 +1,7 @@
+// Will: I think there has been some confusion, the TOKEN_INT_TYPE is to
+// describe "int" keyword, and TOKEN_INT_VALUE is to describe "123".
+// But i guess it doesnt matter.
+
 #include "lexer.h"
 #include "parser.h"
 #include "uthash.h"
@@ -57,27 +61,13 @@ steps:
 #define MAX_SCOPE 100
 
 TokenType analyze_expression(Node *node);
+TokenType analyze_binary_operation(Node *node);
 
 typedef struct {
   char name[32];
   TokenType type;
   UT_hash_handle hh;
 } VariableEntry;
-
-int check_operators(Node *node, char *error_message) {
-  TokenType left_operand =
-      analyze_expression(node->body.binary_operation.left_operand);
-  TokenType right_operand =
-      analyze_expression(node->body.binary_operation.right_operand);
-
-  if (left_operand != NODE_INT_VALUE &&
-      right_operand != NODE_INT_VALUE) { // Ved ikke om dette virke for hvis det
-    // er en identifier?? Ex. int x, y =
-    // 10; x + y; (fejl måske????)
-    printf(error_message);
-    exit(1);
-  }
-}
 
 VariableEntry *scopes[MAX_SCOPE];
 int scope_top = -1;
@@ -106,6 +96,7 @@ void insert_variable(const char *name, TokenType type) {
     printf("Semantic error: Variable %s is already declared\n", name);
     exit(1);
   }
+
   variable = malloc(sizeof(VariableEntry));
   strcpy(variable->name, name);
   variable->type = type;
@@ -114,7 +105,7 @@ void insert_variable(const char *name, TokenType type) {
 }
 
 VariableEntry *lookup_variable(const char *name) {
-  // Loops through each state, starting from the leaf/top
+  // Loops through each scope, starting from the leaf/top (most nested scope)
   for (int i = scope_top; i >= 0; i--) {
     VariableEntry *variable;
     HASH_FIND_STR(scopes[i], name, variable);
@@ -124,6 +115,73 @@ VariableEntry *lookup_variable(const char *name) {
   }
 
   return NULL;
+}
+
+void check_operators(Node *node, char *error_message) {
+  TokenType left_operand =
+      analyze_expression(node->body.binary_operation.left_operand);
+  TokenType right_operand =
+      analyze_expression(node->body.binary_operation.right_operand);
+
+  if (left_operand != TOKEN_INT_TYPE &&
+      right_operand != TOKEN_INT_TYPE) { // Ved ikke om dette virke for hvis det
+    // er en identifier?? Ex. int x, y =
+    // 10; x + y; (fejl måske????)
+    // Will: i analyze_expression under NODE_IDENTIFIER, giver vi 'x' or 'y'
+    // deres int typer. Det skal også tjekkes her. (Tror ikke de har fået deres
+    // typer endnu på det her tidspunkt i koden. Det skal nok gøres her.)
+    printf("%s", error_message);
+    exit(1);
+  }
+}
+
+TokenType analyze_binary_operation(Node *node) {
+  TokenType left_operand =
+      analyze_expression(node->body.binary_operation.left_operand);
+  TokenType right_operand =
+      analyze_expression(node->body.binary_operation.right_operand);
+
+  switch (node->body.binary_operation.operator_type) {
+  case TOKEN_PLUS:
+  case TOKEN_MINUS:
+  case TOKEN_MULTIPLY:
+  case TOKEN_DIVIDE:
+    if (left_operand != TOKEN_INT_TYPE || right_operand != TOKEN_INT_TYPE) {
+      printf(
+          "Semantic error: Arithmetic operations only allowed for type int\n");
+      exit(1);
+    }
+    break;
+  case TOKEN_GREATER_EQUAL:
+  case TOKEN_LESS_EQUAL:
+  case TOKEN_GREATER:
+  case TOKEN_LESS:
+    if (left_operand != TOKEN_INT_TYPE || right_operand != TOKEN_INT_TYPE) {
+      printf("Semantic error: comparisons only allowed for type int\n");
+      exit(1);
+    }
+    break;
+  case TOKEN_EQUAL_EQUAL:
+  case TOKEN_NOT_EQUAL:
+    if (left_operand != right_operand) {
+      printf("Semantic error: equality operations must be on same type\n");
+      exit(1);
+    }
+    break;
+  case TOKEN_AND:
+  case TOKEN_OR:
+    if (left_operand != TOKEN_INT_TYPE || right_operand != TOKEN_INT_TYPE) {
+      printf("Semantic error: logical operations only valid for type int on "
+             "type int\n");
+      exit(1);
+    }
+    break;
+  default:
+    printf("Semantic error: Unsupported operator in binary operation\n");
+    exit(1);
+  }
+
+  return TOKEN_INT_TYPE;
 }
 
 TokenType analyze_expression(Node *node) {
@@ -146,72 +204,13 @@ TokenType analyze_expression(Node *node) {
     // Example of problem:
     // int x;
     // x <-- what type is x?
+    // So this is the most important part of the semantic analysis:
     node->body.identifier.type = variable->type;
 
     return variable->type;
   }
-  case NODE_BINARY_OPERATION: 
-  switch (node->body.binary_operation.operator_type) {
-    case TOKEN_PLUS:
-      check_operators(
-          node,
-          "Semantic error: Arithmetic operations only allowed for type int\n");
-    case TOKEN_MINUS:
-      check_operators(
-          node,
-          "Semantic error: Arithmetic operations only allowed for type int\n");
-    case TOKEN_MULTIPLY:
-      check_operators(
-          node,
-          "Semantic error: Arithmetic operations only allowed for type int\n");
-    case TOKEN_DIVIDE:
-      check_operators(
-          node,
-          "Semantic error: Arithmetic operations only allowed for type int\n");
-    case TOKEN_GREATER_EQUAL:
-      check_operators(
-          node, "Semantic error: comparisons only allowed for type int\n");
-    case TOKEN_LESS_EQUAL:
-      check_operators(
-          node, "Semantic error: comparisons only allowed for type int\n");
-    case TOKEN_GREATER:
-      check_operators(
-          node, "Semantic error: comparisons only allowed for type int\n");
-    case TOKEN_LESS:
-      check_operators(
-          node, "Semantic error: comparisons only allowed for type int\n");
-    case TOKEN_EQUAL_EQUAL:
-      TokenType left_operand =
-          analyze_expression(node->body.binary_operation.left_operand);
-      TokenType right_operand =
-          analyze_expression(node->body.binary_operation.right_operand);
-
-      if (left_operand != right_operand) {
-        printf("Semantic error: equality operations must be on same type \n");
-        exit(1);
-      }
-    case TOKEN_NOT_EQUAL:
-      left_operand =
-          analyze_expression(node->body.binary_operation.left_operand);
-      right_operand =
-          analyze_expression(node->body.binary_operation.right_operand);
-
-      if (left_operand != right_operand) {
-        printf("Semantic error: equality operations must be on same type \n");
-        exit(1);
-      }
-    case TOKEN_AND:
-      check_operators(node,
-                      "Semantic error: logical operations only valid for type "
-                      "int on type int\n");
-    case TOKEN_OR:
-      check_operators(node,
-                      "Semantic error: logical operations only valid for type "
-                      "int on type int\n");
-    default:
-      printf("Semantic error: Unsupported operator in binary operation\n");
-      exit(1);
-  }
+  case NODE_BINARY_OPERATION:
+    return analyze_binary_operation(node);
   case NODE_UNARY_OPERATION: {
     TokenType operand_type =
         analyze_expression(node->body.unary_operation.operand);
@@ -226,7 +225,6 @@ TokenType analyze_expression(Node *node) {
     exit(1);
   }
 }
-
 
 void analyze_node(Node *node) {
   switch (node->type) {

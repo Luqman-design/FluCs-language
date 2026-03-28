@@ -1,3 +1,3 @@
 #include <stdlib.h> 
                    #include <stdio.h> 
-                   int main() {int x=1;return 0;}
+                   int main() {if ((2<3)){int x=1;printf();}return 0;}
