@@ -1,6 +1,6 @@
 // Will: I think there has been some confusion, the TOKEN_INT_TYPE is to
-// describe "int" keyword, and TOKEN_INT_VALUE is to describe "123".
-// But i guess it doesnt matter.
+// describe "int" keyword and the variable 'x', and TOKEN_INT_VALUE is to
+// describe "123". But i guess it doesnt matter.
 
 #include "lexer.h"
 #include "parser.h"

@@ -184,8 +184,15 @@ void emit_statement(Node *node, char **output, int *output_length,
     } else if (node->body.print.print_value->type == NODE_IDENTIFIER) {
       add_to_output(current_output_position, output_length, output, "printf(");
 
-      // if (node->body.print.print_value->body.print.print_value ==
-      // NODE_INT_VALUE)
+      if (node->body.print.print_value->type == NODE_IDENTIFIER) {
+        if (node->body.print.print_value->body.identifier.type ==
+            TOKEN_INT_TYPE) {
+          char buffer[100];
+          snprintf(buffer, sizeof(buffer), "\"%%d\", %s",
+                   node->body.print.print_value->body.identifier.name);
+          add_to_output(current_output_position, output_length, output, buffer);
+        }
+      }
 
       add_to_output(current_output_position, output_length, output, ");");
     }
