@@ -270,7 +270,7 @@ static Node *parse_var_update(Lexer *lexer) {
 
   node->body.var_update.variable_name = variable_name.value.string_value;
   node->body.var_update._operator = operator_type;
-  node->body.var_update.binary_operation = expression;
+  node->body.var_update.value = expression;
 
   return node;
 }
@@ -471,5 +471,6 @@ static Node *parse_primary(Lexer *lexer) {
   }
 
   // Unexpected token
-  return NULL;
+  fprintf(stderr, "Parser error: Unexpected token\n");
+  exit(1);
 }

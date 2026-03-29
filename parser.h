@@ -36,7 +36,7 @@ typedef struct Node {
     struct {
       char *variable_name;
       TokenType _operator;
-      struct Node *binary_operation;
+      struct Node *value;
     } var_update;
     struct {
       struct Node *condition;

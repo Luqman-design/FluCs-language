@@ -257,6 +257,21 @@ void analyze_node(Node *node) {
     }
     break;
   }
+  case NODE_VAR_UPDATE: {
+    TokenType variable_type =
+        analyze_expression(node->body.var_update.value);
+    char *variable_name = node->body.var_update.variable_name;
+
+    VariableEntry *variable = lookup_variable(variable_name);
+
+    if (variable_type != variable->type) {
+      printf("Semantic error: Type mismatch in variable update on %s\n",
+             variable_name);
+      exit(1);
+    }
+    break;
+  }
+
   case NODE_IF_STATEMENT: {
     TokenType condition_type =
         analyze_expression(node->body.if_statement.condition);

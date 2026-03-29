@@ -62,6 +62,9 @@ function codegen {
 void emit_statement(Node *node, char **output, int *output_length,
                     int *current_output_position);
 
+void emit_binary_operation(Node *node, char **output, int *output_length,
+                           int *current_output_position);
+
 void add_to_output(int *current_output_position, int *output_length,
                    char **output, char *string_to_add) {
 
@@ -77,8 +80,49 @@ void add_to_output(int *current_output_position, int *output_length,
   *current_output_position += strlen(string_to_add);
 }
 
+void emit_expression(Node *node, char **output, int *output_length,
+                     int *current_output_position) {
+
+  if (!node) {
+    fprintf(stderr, "ERROR: NULL expression\n");
+    exit(1);
+  }
+
+  switch (node->type) {
+  case NODE_BINARY_OPERATION:
+    emit_binary_operation(node, output, output_length,
+                          current_output_position);
+    break;
+
+  case NODE_INT_VALUE: {
+    char buffer[20];
+    snprintf(buffer, sizeof(buffer), "%d",
+             node->body.int_value.value);
+    add_to_output(current_output_position, output_length, output, buffer);
+    break;
+  }
+
+  case NODE_IDENTIFIER:
+    add_to_output(current_output_position, output_length, output,
+                  node->body.identifier.name);
+    break;
+
+  default:
+    fprintf(stderr, "Unsupported expression type: %d\n", node->type);
+    exit(1);
+  }
+}
+
 void emit_binary_operation(Node *node, char **output, int *output_length,
                            int *current_output_position) {
+
+  if (!node ||
+      !node->body.binary_operation.left_operand ||
+      !node->body.binary_operation.right_operand) {
+    fprintf(stderr, "Invalid binary operation node\n");
+    exit(1);
+  }
+
   add_to_output(current_output_position, output_length, output, "(");
   if (node->body.binary_operation.left_operand->type == NODE_BINARY_OPERATION) {
     emit_binary_operation(node->body.binary_operation.left_operand, output,
@@ -174,7 +218,7 @@ void emit_statement(Node *node, char **output, int *output_length,
 
   if (node->type == NODE_IF_STATEMENT) {
     add_to_output(current_output_position, output_length, output, "if (");
-    emit_binary_operation(node->body.if_statement.condition, output,
+    emit_expression(node->body.if_statement.condition, output,
                           output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, "){");
 
@@ -222,6 +266,28 @@ void emit_statement(Node *node, char **output, int *output_length,
 
       add_to_output(current_output_position, output_length, output, buffer);
     }
+    add_to_output(current_output_position, output_length, output, ";");
+  } else if (node->type == NODE_VAR_UPDATE) {
+    add_to_output(current_output_position, output_length, output,
+                  node->body.var_update.variable_name);
+
+    switch (node->body.var_update._operator) {
+    case TOKEN_EQUAL:
+      add_to_output(current_output_position, output_length, output, "=");
+      break;
+    case TOKEN_PLUS_EQUAL:
+      add_to_output(current_output_position, output_length, output, "+=");
+      break;
+    case TOKEN_MINUS_EQUAL:
+      add_to_output(current_output_position, output_length, output, "-=");
+      break;
+    default:
+      perror("Unsupported operator type for variable updating.");
+    }
+
+    emit_expression(node->body.var_update.value, output,
+                          output_length, current_output_position);
+
     add_to_output(current_output_position, output_length, output, ";");
   }
 }
