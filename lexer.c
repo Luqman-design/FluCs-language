@@ -221,7 +221,12 @@ Token next_token(Lexer *lexer) {
 
     // Other (such as whitespaces)
     else {
-      lexer->position++;
+      if (current_token_buffer == ' ') {
+        lexer->position++;
+      } else {
+        printf("Error: %s is an illegal symbol", current_token_buffer);
+        exit(1);
+      }
     }
   }
 

@@ -123,58 +123,47 @@ void check_operators(Node *node, char *error_message) {
   TokenType right_operand =
       analyze_expression(node->body.binary_operation.right_operand);
 
-  if (left_operand != TOKEN_INT_TYPE &&
-      right_operand != TOKEN_INT_TYPE) { // Ved ikke om dette virke for hvis det
-    // er en identifier?? Ex. int x, y =
-    // 10; x + y; (fejl måske????)
-    // Will: i analyze_expression under NODE_IDENTIFIER, giver vi 'x' or 'y'
-    // deres int typer. Det skal også tjekkes her. (Tror ikke de har fået deres
-    // typer endnu på det her tidspunkt i koden. Det skal nok gøres her.)
+  if (left_operand != TOKEN_INT_TYPE ||
+      right_operand != TOKEN_INT_TYPE) { 
+    printf("%s", error_message);
+    exit(1);
+  }
+}
+
+void check_equality_operators(Node *node, char *error_message) {
+  TokenType left_operand =
+      analyze_expression(node->body.binary_operation.left_operand);
+  TokenType right_operand =
+      analyze_expression(node->body.binary_operation.right_operand);
+
+  if (left_operand != right_operand) { 
     printf("%s", error_message);
     exit(1);
   }
 }
 
 TokenType analyze_binary_operation(Node *node) {
-  TokenType left_operand =
-      analyze_expression(node->body.binary_operation.left_operand);
-  TokenType right_operand =
-      analyze_expression(node->body.binary_operation.right_operand);
 
   switch (node->body.binary_operation.operator_type) {
   case TOKEN_PLUS:
   case TOKEN_MINUS:
   case TOKEN_MULTIPLY:
   case TOKEN_DIVIDE:
-    if (left_operand != TOKEN_INT_TYPE || right_operand != TOKEN_INT_TYPE) {
-      printf(
-          "Semantic error: Arithmetic operations only allowed for type int\n");
-      exit(1);
-    }
+    check_operators(node, "Semantic error: Arithmetic operations only allowed for type int\n");
     break;
   case TOKEN_GREATER_EQUAL:
   case TOKEN_LESS_EQUAL:
   case TOKEN_GREATER:
   case TOKEN_LESS:
-    if (left_operand != TOKEN_INT_TYPE || right_operand != TOKEN_INT_TYPE) {
-      printf("Semantic error: comparisons only allowed for type int\n");
-      exit(1);
-    }
+    check_operators(node, "Semantic error: Comparison operations only allowed for type int\n");
     break;
   case TOKEN_EQUAL_EQUAL:
   case TOKEN_NOT_EQUAL:
-    if (left_operand != right_operand) {
-      printf("Semantic error: equality operations must be on same type\n");
-      exit(1);
-    }
+    check_equality_operators(node, "Semantic error: equality operations must be on same type\n");
     break;
   case TOKEN_AND:
   case TOKEN_OR:
-    if (left_operand != TOKEN_INT_TYPE || right_operand != TOKEN_INT_TYPE) {
-      printf("Semantic error: logical operations only valid for type int on "
-             "type int\n");
-      exit(1);
-    }
+    check_operators(node, "Semantic error: logical operations only valid for type int on type int\n");
     break;
   default:
     printf("Semantic error: Unsupported operator in binary operation\n");
@@ -197,14 +186,6 @@ TokenType analyze_expression(Node *node) {
              node->body.identifier.name);
       exit(1);
     }
-
-    // The parser does not know what type 'x' is.
-    // Therefore after we have found the variable declaration,
-    // we can then assign the type to all calls to 'int x;'.
-    // Example of problem:
-    // int x;
-    // x <-- what type is x?
-    // So this is the most important part of the semantic analysis:
     node->body.identifier.type = variable->type;
 
     return variable->type;
@@ -215,7 +196,7 @@ TokenType analyze_expression(Node *node) {
     TokenType operand_type =
         analyze_expression(node->body.unary_operation.operand);
     if (operand_type != TOKEN_INT_TYPE) {
-      printf("Semantic error: Unary operator ! requires an integer operand\n");
+      printf("Semantic error: Unary operator requires an integer operand\n");
       exit(1);
     }
     return TOKEN_INT_TYPE;
@@ -248,13 +229,12 @@ void analyze_node(Node *node) {
     TokenType expression_type =
         analyze_expression(node->body.var_declaration.variable_value);
 
-    insert_variable(variable_name, variable_type);
-
     if (expression_type != variable_type) {
       printf("Semantic error: Type mismatch in assignment to %s\n",
              variable_name);
       exit(1);
     }
+    insert_variable(variable_name, variable_type); 
     break;
   }
   case NODE_VAR_UPDATE: {
@@ -297,26 +277,3 @@ void analyze_node(Node *node) {
 
 void semantic_analysis(Node *root) { analyze_node(root); }
 
-/*
-  TO DO:
-  Lige så compare den bare: left_type == right_type.
-
-  Vi skal tjekke operator type og så tjekke at det er de rigtige typer for den
-  operator. F.eks.:
-
-  1. Arithmetic (+, -, *, /)
-     Kun integers tilladt
-     Return type: int
-
-  2. Comparison (<, >, <=, >=)
-     Kun integers tilladt
-     Return type: int (bruger int, da vi ikke har boolean)
-
-  3. Equality (==, !=)
-     Ens typer (int == int, string == string)
-     Return type: int
-
-  4. Logical (&&, ||)
-     Kun integers tilladt
-     Return type: int
-*/
