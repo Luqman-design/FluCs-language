@@ -139,6 +139,8 @@ Token next_token(Lexer *lexer) {
         token.type = TOKEN_PLUS_EQUAL;
       } else if (strcmp(current_token_buffer, "-=") == 0) {
         token.type = TOKEN_MINUS_EQUAL;
+      } else if (strcmp(current_token_buffer, "++")) {
+        token.type = TOKEN_PLUS_PLUS;
       } else {
         token.type = TOKEN_ILLEGAL;
       }
@@ -221,7 +223,12 @@ Token next_token(Lexer *lexer) {
 
     // Other (such as whitespaces)
     else {
-      lexer->position++;
+      if (current_token_buffer == ' ') {
+        lexer->position++;
+      } else {
+        printf("Error: %s is an illegal symbol", current_token_buffer);
+        exit(1);
+      }
     }
   }
 

@@ -109,6 +109,7 @@ static Node *parse_print(Lexer *lexer);
 static Node *parse_var_declaration(Lexer *lexer);
 static Node *parse_var_update(Lexer *lexer);
 static Node *parse_for_loop(Lexer *lexer);
+static Node *parse_function(Lexer *lexer);
 static Node *parse_block(Lexer *lexer);
 static Node *parse_expression(Lexer *lexer);
 static Node *parse_comparison(Lexer *lexer);
@@ -290,6 +291,26 @@ static Node *parse_var_update(Lexer *lexer) {
   node->body.var_update.variable_name = variable_name.value.string_value;
   node->body.var_update._operator = operator_type;
   node->body.var_update.value = expression;
+
+  return node;
+}
+
+// for_loop ::= "for" "(" varDeclaration ";" expression ";" varUpdate ";" ")" Block
+static Node *parse_for_loop(Lexer *lexer) {
+  Node *node = malloc(sizeof(Node));
+  node->type = NODE_FOR_LOOP;
+
+  consume(lexer); // for
+  consume(lexer); // (
+  node->body.for_loop.initializer = parse_var_declaration(lexer);
+  consume(lexer); // ;
+  node->body.for_loop.condition = parse_expression(lexer);
+  consume(lexer); // ;
+  node->body.for_loop.updater = parse_var_update(lexer);
+  consume(lexer); // )
+
+  // parse for_loop block
+  node->body.for_loop.body = parse_block(lexer);
 
   return node;
 }

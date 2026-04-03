@@ -90,17 +90,20 @@ void emit_expression(Node *node, char **output, int *output_length,
 
   switch (node->type) {
   case NODE_BINARY_OPERATION:
-    emit_binary_operation(node, output, output_length,
-                          current_output_position);
+    emit_binary_operation(node, output, output_length, current_output_position);
     break;
 
   case NODE_INT_VALUE: {
     char buffer[20];
-    snprintf(buffer, sizeof(buffer), "%d",
-             node->body.int_value.value);
+    snprintf(buffer, sizeof(buffer), "%d", node->body.int_value.value);
     add_to_output(current_output_position, output_length, output, buffer);
     break;
   }
+
+  case NODE_STRING_VALUE: 
+    add_to_output(current_output_position, output_length, output,
+                  node->body.string_value.value);
+    break;
 
   case NODE_IDENTIFIER:
     add_to_output(current_output_position, output_length, output,
@@ -116,8 +119,7 @@ void emit_expression(Node *node, char **output, int *output_length,
 void emit_binary_operation(Node *node, char **output, int *output_length,
                            int *current_output_position) {
 
-  if (!node ||
-      !node->body.binary_operation.left_operand ||
+  if (!node || !node->body.binary_operation.left_operand ||
       !node->body.binary_operation.right_operand) {
     fprintf(stderr, "Invalid binary operation node\n");
     exit(1);
@@ -133,9 +135,14 @@ void emit_binary_operation(Node *node, char **output, int *output_length,
              node->body.binary_operation.left_operand->body.int_value.value);
 
     add_to_output(current_output_position, output_length, output, buffer);
+  } else if (node->body.binary_operation.left_operand->type == // Tilføjet denne, da ("Hej" (==)/(!=) "Hej") er tilladt
+             NODE_STRING_VALUE) {
+    add_to_output(
+        current_output_position, output_length, output,
+        node->body.binary_operation.left_operand->body.string_value.value);
   } else if (node->body.binary_operation.left_operand->type ==
              NODE_IDENTIFIER) {
-    // The valitity of the types was checked in the semantic analysis.
+    // The validity of the types was checked in the semantic analysis.
     add_to_output(
         current_output_position, output_length, output,
         node->body.binary_operation.left_operand->body.identifier.name);
@@ -194,9 +201,14 @@ void emit_binary_operation(Node *node, char **output, int *output_length,
              node->body.binary_operation.right_operand->body.int_value.value);
 
     add_to_output(current_output_position, output_length, output, buffer);
+    } else if (node->body.binary_operation.left_operand->type == // Tilføjet denne, da ("Hej" (==)/(!=) "Hej") er tilladt
+             NODE_STRING_VALUE) {
+    add_to_output(
+        current_output_position, output_length, output,
+        node->body.binary_operation.left_operand->body.string_value.value);
   } else if (node->body.binary_operation.right_operand->type ==
              NODE_IDENTIFIER) {
-    // The valitity of the types was checked in the semantic analysis.
+    // The validity of the types was checked in the semantic analysis.
     add_to_output(
         current_output_position, output_length, output,
         node->body.binary_operation.right_operand->body.identifier.name);
@@ -218,15 +230,19 @@ void emit_statement(Node *node, char **output, int *output_length,
 
   if (node->type == NODE_IF_STATEMENT) {
     add_to_output(current_output_position, output_length, output, "if (");
-    emit_expression(node->body.if_statement.condition, output,
-                          output_length, current_output_position);
+    emit_expression(node->body.if_statement.condition, output, output_length,
+                    current_output_position);
     add_to_output(current_output_position, output_length, output, "){");
 
     emit_block(node->body.if_statement.then_branch, output, output_length,
                current_output_position);
-
     add_to_output(current_output_position, output_length, output, "}");
-
+    if (node->body.if_statement.else_branch != NULL) {
+      add_to_output(current_output_position, output_length, output, "else {"); // tilføjet denne
+      emit_block(node->body.if_statement.else_branch, output, output_length,
+               current_output_position);
+      add_to_output(current_output_position, output_length, output, "}");
+    }
   } else if (node->type == NODE_PRINT) {
     if (node->body.print.print_value->type == NODE_INT_VALUE) {
       add_to_output(current_output_position, output_length, output,
@@ -236,6 +252,13 @@ void emit_statement(Node *node, char **output, int *output_length,
                node->body.print.print_value->body.int_value.value);
 
       add_to_output(current_output_position, output_length, output, buffer);
+      add_to_output(current_output_position, output_length, output, ");");
+    } 
+    if (node->body.print.print_value->type == NODE_STRING_VALUE) { // tilføjet denne
+      add_to_output(current_output_position, output_length, output,
+                    "printf(\"%s\",");
+      add_to_output(current_output_position, output_length, output, 
+                    node->body.print.print_value->body.string_value.value);
       add_to_output(current_output_position, output_length, output, ");");
     } else if (node->body.print.print_value->type == NODE_IDENTIFIER) {
       add_to_output(current_output_position, output_length, output, "printf(");
@@ -267,7 +290,10 @@ void emit_statement(Node *node, char **output, int *output_length,
       add_to_output(current_output_position, output_length, output, buffer);
     }
     add_to_output(current_output_position, output_length, output, ";");
-  } else if (node->type == NODE_VAR_UPDATE) {
+    } else if (node->body.var_declaration.variable_type == TOKEN_STRING_TYPE) {
+      add_to_output(current_output_position, output_length, output, ""); //tilføjet denne
+    } 
+  else if (node->type == NODE_VAR_UPDATE) {
     add_to_output(current_output_position, output_length, output,
                   node->body.var_update.variable_name);
 
@@ -281,14 +307,33 @@ void emit_statement(Node *node, char **output, int *output_length,
     case TOKEN_MINUS_EQUAL:
       add_to_output(current_output_position, output_length, output, "-=");
       break;
+    case TOKEN_PLUS_PLUS:
+      add_to_output(current_output_position, output_length, output, "++");
+      break;
     default:
       perror("Unsupported operator type for variable updating.");
     }
 
-    emit_expression(node->body.var_update.value, output,
-                          output_length, current_output_position);
+    emit_expression(node->body.var_update.value, output, output_length,
+                    current_output_position);
 
     add_to_output(current_output_position, output_length, output, ";");
+  } else if (node->type == NODE_FOR_LOOP) {
+    add_to_output(current_output_position, output_length, output, "for (");
+
+    emit_expression(node->body.for_loop.initializer, output, output_length,
+                    current_output_position);
+    emit_expression(node->body.for_loop.condition, output, output_length,
+                    current_output_position);
+    emit_expression(node->body.for_loop.updater, output, output_length,
+                    current_output_position);
+
+    add_to_output(current_output_position, output_length, output, "){");
+
+    emit_block(node->body.for_loop.body, output, output_length,
+               current_output_position);
+
+    add_to_output(current_output_position, output_length, output, "}");
   }
 }
 
