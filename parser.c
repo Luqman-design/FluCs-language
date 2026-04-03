@@ -276,6 +276,7 @@ static Node *parse_var_update(Lexer *lexer) {
   return node;
 }
 
+// for_loop ::= "for" "(" varDeclaration ";" expression ";" varUpdate ";" ")" Block
 static Node *parse_for_loop(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_FOR_LOOP;
@@ -283,13 +284,14 @@ static Node *parse_for_loop(Lexer *lexer) {
   consume(lexer); // for
   consume(lexer); // (
   node->body.for_loop.initializer = parse_var_declaration(lexer);
+  consume(lexer); // ;
   node->body.for_loop.condition = parse_expression(lexer);
+  consume(lexer); // ;
   node->body.for_loop.updater = parse_var_update(lexer);
   consume(lexer); // )
-  node->body.for_loop.body = parse_block(lexer);
 
-  // Måske skal der consume(lexer) // ; i mellem initializer, condition og
-  // updater, men jeg er ikke sikker William har sikker svar på det.
+  // parse for_loop block
+  node->body.for_loop.body = parse_block(lexer);
 
   return node;
 }

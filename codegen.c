@@ -100,6 +100,11 @@ void emit_expression(Node *node, char **output, int *output_length,
     break;
   }
 
+  case NODE_STRING_VALUE: 
+    add_to_output(current_output_position, output_length, output,
+                  node->body.string_value.value);
+    break;
+
   case NODE_IDENTIFIER:
     add_to_output(current_output_position, output_length, output,
                   node->body.identifier.name);
@@ -130,6 +135,11 @@ void emit_binary_operation(Node *node, char **output, int *output_length,
              node->body.binary_operation.left_operand->body.int_value.value);
 
     add_to_output(current_output_position, output_length, output, buffer);
+  } else if (node->body.binary_operation.left_operand->type == // Tilføjet denne, da ("Hej" (==)/(!=) "Hej") er tilladt
+             NODE_STRING_VALUE) {
+    add_to_output(
+        current_output_position, output_length, output,
+        node->body.binary_operation.left_operand->body.string_value.value);
   } else if (node->body.binary_operation.left_operand->type ==
              NODE_IDENTIFIER) {
     // The validity of the types was checked in the semantic analysis.
@@ -191,9 +201,14 @@ void emit_binary_operation(Node *node, char **output, int *output_length,
              node->body.binary_operation.right_operand->body.int_value.value);
 
     add_to_output(current_output_position, output_length, output, buffer);
+    } else if (node->body.binary_operation.left_operand->type == // Tilføjet denne, da ("Hej" (==)/(!=) "Hej") er tilladt
+             NODE_STRING_VALUE) {
+    add_to_output(
+        current_output_position, output_length, output,
+        node->body.binary_operation.left_operand->body.string_value.value);
   } else if (node->body.binary_operation.right_operand->type ==
              NODE_IDENTIFIER) {
-    // The valitity of the types was checked in the semantic analysis.
+    // The validity of the types was checked in the semantic analysis.
     add_to_output(
         current_output_position, output_length, output,
         node->body.binary_operation.right_operand->body.identifier.name);
@@ -221,9 +236,13 @@ void emit_statement(Node *node, char **output, int *output_length,
 
     emit_block(node->body.if_statement.then_branch, output, output_length,
                current_output_position);
-
     add_to_output(current_output_position, output_length, output, "}");
-
+    if (node->body.if_statement.else_branch != NULL) {
+      add_to_output(current_output_position, output_length, output, "else {"); // tilføjet denne
+      emit_block(node->body.if_statement.else_branch, output, output_length,
+               current_output_position);
+      add_to_output(current_output_position, output_length, output, "}");
+    }
   } else if (node->type == NODE_PRINT) {
     if (node->body.print.print_value->type == NODE_INT_VALUE) {
       add_to_output(current_output_position, output_length, output,
@@ -233,6 +252,13 @@ void emit_statement(Node *node, char **output, int *output_length,
                node->body.print.print_value->body.int_value.value);
 
       add_to_output(current_output_position, output_length, output, buffer);
+      add_to_output(current_output_position, output_length, output, ");");
+    } 
+    if (node->body.print.print_value->type == NODE_STRING_VALUE) { // tilføjet denne
+      add_to_output(current_output_position, output_length, output,
+                    "printf(\"%s\",");
+      add_to_output(current_output_position, output_length, output, 
+                    node->body.print.print_value->body.string_value.value);
       add_to_output(current_output_position, output_length, output, ");");
     } else if (node->body.print.print_value->type == NODE_IDENTIFIER) {
       add_to_output(current_output_position, output_length, output, "printf(");
@@ -264,7 +290,10 @@ void emit_statement(Node *node, char **output, int *output_length,
       add_to_output(current_output_position, output_length, output, buffer);
     }
     add_to_output(current_output_position, output_length, output, ";");
-  } else if (node->type == NODE_VAR_UPDATE) {
+    } else if (node->body.var_declaration.variable_type == TOKEN_STRING_TYPE) {
+      add_to_output(current_output_position, output_length, output, ""); //tilføjet denne
+    } 
+  else if (node->type == NODE_VAR_UPDATE) {
     add_to_output(current_output_position, output_length, output,
                   node->body.var_update.variable_name);
 
