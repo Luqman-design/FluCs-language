@@ -195,7 +195,7 @@ static Node *parse_if_statement(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_IF_STATEMENT;
 
-  consume(lexer, TOKEN_IF); // if
+  consume(lexer, TOKEN_IF);         // if
   consume(lexer, TOKEN_LEFT_PAREN); // (
   node->body.if_statement.condition = parse_expression(lexer);
   consume(lexer, TOKEN_RIGHT_PAREN); // )
@@ -230,11 +230,11 @@ static Node *parse_print(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_PRINT;
 
-  consume(lexer, TOKEN_PRINT); // print
+  consume(lexer, TOKEN_PRINT);      // print
   consume(lexer, TOKEN_LEFT_PAREN); // (
   node->body.print.print_value = parse_expression(lexer);
   consume(lexer, TOKEN_RIGHT_PAREN); // )
-  consume(lexer, TOKEN_SEMICOLON); // ;
+  consume(lexer, TOKEN_SEMICOLON);   // ;
 
   return node;
 }
@@ -260,7 +260,7 @@ static Node *parse_var_declaration(Lexer *lexer) {
   }
 
   Token variable_name = consume(lexer, TOKEN_IDENTIFIER); // identifier
-  consume(lexer, TOKEN_EQUAL); // =
+  consume(lexer, TOKEN_EQUAL);                            // =
   Node *expression = parse_expression(lexer);
   consume(lexer, TOKEN_SEMICOLON); // ;
 
@@ -295,19 +295,20 @@ static Node *parse_var_update(Lexer *lexer) {
   return node;
 }
 
-// for_loop ::= "for" "(" varDeclaration ";" expression ";" varUpdate ";" ")" Block
+// for_loop ::= "for" "(" varDeclaration ";" expression ";" varUpdate ";" ")"
+// Block
 static Node *parse_for_loop(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_FOR_LOOP;
 
-  consume(lexer); // for
-  consume(lexer); // (
+  consume(lexer, TOKEN_FOR);
+  consume(lexer, TOKEN_LEFT_PAREN);
   node->body.for_loop.initializer = parse_var_declaration(lexer);
-  consume(lexer); // ;
+  consume(lexer, TOKEN_SEMICOLON);
   node->body.for_loop.condition = parse_expression(lexer);
-  consume(lexer); // ;
+  consume(lexer, TOKEN_SEMICOLON);
   node->body.for_loop.updater = parse_var_update(lexer);
-  consume(lexer); // )
+  consume(lexer, TOKEN_RIGHT_PAREN);
 
   // parse for_loop block
   node->body.for_loop.body = parse_block(lexer);
@@ -327,7 +328,7 @@ static Node *parse_block(Lexer *lexer) {
 
   int statement_count = 0;
   int statement_capacity = 4;
-  consume(lexer,TOKEN_LEFT_CURLYBRACKET); // {
+  consume(lexer, TOKEN_LEFT_CURLYBRACKET); // {
   Node **statements = malloc(sizeof(Node *) * statement_capacity);
 
   while (peek(lexer).type != TOKEN_RIGHT_CURLYBRACKET) {
@@ -338,7 +339,7 @@ static Node *parse_block(Lexer *lexer) {
     statements[statement_count] = parse_statement(lexer);
     statement_count++;
   }
-  consume(lexer,TOKEN_RIGHT_CURLYBRACKET); // }
+  consume(lexer, TOKEN_RIGHT_CURLYBRACKET); // }
 
   node->body.block.statements = statements;
   node->body.block.statement_count = statement_count;
@@ -468,7 +469,7 @@ static Node *parse_factor(Lexer *lexer) {
 // unary ::= "!" unary | primary
 static Node *parse_unary(Lexer *lexer) {
   if (peek(lexer).type == TOKEN_NOT) {
-    consume(lexer,TOKEN_NOT); // !
+    consume(lexer, TOKEN_NOT); // !
 
     Node *node = malloc(sizeof(Node));
     node->type = NODE_UNARY_OPERATION;
