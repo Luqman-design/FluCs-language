@@ -1,3 +1,3 @@
 #include <stdlib.h> 
                    #include <stdio.h> 
-int function_name(int a, int b) {return (a+b);}int main() {int result=function_name(2, 3);printf("%d", result);return 0;}
+int main() {for (int i=0; (i<5); i+=1) {printf("%d", i);}return 0;}

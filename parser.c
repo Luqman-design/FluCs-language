@@ -117,6 +117,7 @@ static Node *parse_if_statement(Lexer *lexer);
 static Node *parse_print(Lexer *lexer);
 static Node *parse_var_declaration(Lexer *lexer);
 static Node *parse_var_update(Lexer *lexer);
+static Node *parse_var_update_with_semicolon(Lexer *lexer);
 static Node *parse_for_loop(Lexer *lexer);
 static Node *parse_function(Lexer *lexer);
 static Node *parse_return_statement(Lexer *lexer);
@@ -191,9 +192,9 @@ static Node *parse_statement(Lexer *lexer) {
     if (peek_after_identifier_is_left_paren(lexer)) {
       return parse_function_call(lexer);
     }
-    return parse_var_update(lexer);
+    return parse_var_update_with_semicolon(lexer);
   } else if (token.type == TOKEN_FOR) {
-    perror("For loop not yet implemented");
+    return parse_for_loop(lexer);
   } else if (token.type == TOKEN_FUNCTION) {
     return parse_function(lexer);
   } else if (token.type == TOKEN_RETURN) {
@@ -299,18 +300,23 @@ static Node *parse_var_update(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_VAR_UPDATE;
 
-  Token variable_name = consume(lexer, TOKEN_IDENTIFIER); // identifier
+  Token variable_name = consume(lexer, TOKEN_IDENTIFIER);
   Token operator_token = peek(lexer);
   TokenType operator_type;
-  if (operator_token.type == TOKEN_PLUS || operator_token.type == TOKEN_MINUS) {
-    operator_type = operator_token.type;
-    consume(lexer, operator_type);
+  if (operator_token.type == TOKEN_PLUS_EQUAL) {
+    operator_type = TOKEN_PLUS_EQUAL;
+    consume(lexer, TOKEN_PLUS_EQUAL);
+  } else if (operator_token.type == TOKEN_MINUS_EQUAL) {
+    operator_type = TOKEN_MINUS_EQUAL;
+    consume(lexer, TOKEN_MINUS_EQUAL);
+  } else if (operator_token.type == TOKEN_PLUS_PLUS) {
+    operator_type = TOKEN_PLUS_PLUS;
+    consume(lexer, TOKEN_PLUS_PLUS);
   } else {
     operator_type = TOKEN_EQUAL;
+    consume(lexer, TOKEN_EQUAL);
   }
-  consume(lexer, TOKEN_EQUAL);
   Node *expression = parse_expression(lexer);
-  consume(lexer, TOKEN_SEMICOLON); // ;
 
   node->body.var_update.variable_name = variable_name.value.string_value;
   node->body.var_update._operator = operator_type;
@@ -319,8 +325,13 @@ static Node *parse_var_update(Lexer *lexer) {
   return node;
 }
 
-// for_loop ::= "for" "(" varDeclaration ";" expression ";" varUpdate ";" ")"
-// Block
+static Node *parse_var_update_with_semicolon(Lexer *lexer) {
+  Node *node = parse_var_update(lexer);
+  consume(lexer, TOKEN_SEMICOLON);
+  return node;
+}
+
+// for_loop ::= "for" "(" varDeclaration ";" expression ";" varUpdate ")" Block
 static Node *parse_for_loop(Lexer *lexer) {
   Node *node = malloc(sizeof(Node));
   node->type = NODE_FOR_LOOP;
@@ -328,7 +339,6 @@ static Node *parse_for_loop(Lexer *lexer) {
   consume(lexer, TOKEN_FOR);
   consume(lexer, TOKEN_LEFT_PAREN);
   node->body.for_loop.initializer = parse_var_declaration(lexer);
-  consume(lexer, TOKEN_SEMICOLON);
   node->body.for_loop.condition = parse_expression(lexer);
   consume(lexer, TOKEN_SEMICOLON);
   node->body.for_loop.updater = parse_var_update(lexer);

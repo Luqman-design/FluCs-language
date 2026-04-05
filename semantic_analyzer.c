@@ -272,8 +272,16 @@ void analyze_node(Node *node) {
   }
 
   case NODE_FOR_LOOP:
-    TokenType for_loop_initiializer =
-        analyze_expression(node->body.for_loop.initializer);
+    analyze_node(node->body.for_loop.initializer);
+    TokenType condition_type =
+        analyze_expression(node->body.for_loop.condition);
+    if (condition_type != TOKEN_INT_TYPE) {
+      printf("Semantic error: for loop condition must be integer\n");
+      exit(1);
+    }
+    analyze_node(node->body.for_loop.updater);
+    analyze_node(node->body.for_loop.body);
+    break;
 
   case NODE_FUNCTION: {
     enter_scope();

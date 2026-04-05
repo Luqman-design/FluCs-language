@@ -374,14 +374,36 @@ void emit_statement(Node *node, char **output, int *output_length,
   } else if (node->type == NODE_FOR_LOOP) {
     add_to_output(current_output_position, output_length, output, "for (");
 
-    emit_expression(node->body.for_loop.initializer, output, output_length,
-                    current_output_position);
+    emit_statement(node->body.for_loop.initializer, output, output_length,
+                   current_output_position);
+    add_to_output(current_output_position, output_length, output, " ");
     emit_expression(node->body.for_loop.condition, output, output_length,
                     current_output_position);
-    emit_expression(node->body.for_loop.updater, output, output_length,
+    add_to_output(current_output_position, output_length, output, "; ");
+
+    Node *updater = node->body.for_loop.updater;
+    add_to_output(current_output_position, output_length, output,
+                  updater->body.var_update.variable_name);
+    switch (updater->body.var_update._operator) {
+    case TOKEN_EQUAL:
+      add_to_output(current_output_position, output_length, output, "=");
+      break;
+    case TOKEN_PLUS_EQUAL:
+      add_to_output(current_output_position, output_length, output, "+=");
+      break;
+    case TOKEN_MINUS_EQUAL:
+      add_to_output(current_output_position, output_length, output, "-=");
+      break;
+    case TOKEN_PLUS_PLUS:
+      add_to_output(current_output_position, output_length, output, "++");
+      break;
+    default:
+      break;
+    }
+    emit_expression(updater->body.var_update.value, output, output_length,
                     current_output_position);
 
-    add_to_output(current_output_position, output_length, output, "){");
+    add_to_output(current_output_position, output_length, output, ") {");
 
     emit_block(node->body.for_loop.body, output, output_length,
                current_output_position);
@@ -443,11 +465,9 @@ void emit_program(Node *node, char **output, int *output_length,
 }
 
 int main() {
-  char *str = "func int function_name(int a, int b) { \
-                   return a + b; \
-                } \
-                int result = function_name(2, 3); \
-                print(result);\n";
+  char *str = "for (int i = 0; i < 5; i += 1) { \
+                   print(i); \
+               }\n";
   int output_length = 30;
   int current_output_position = 0;
   char *output = (char *)malloc((output_length + 1) * sizeof(char));
