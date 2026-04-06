@@ -494,7 +494,7 @@ int main() {
   free(output);
 
   system("gcc temp.c -o temp.exe");
-  system("./temp.exe");
+  system(".\\temp.exe");
 
   return 0;
 }
