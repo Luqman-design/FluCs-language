@@ -414,23 +414,23 @@ void emit_statement(Node *node, char **output, int *output_length,
     emit_expression(node->body.return_statement.expression, output,
                     output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, ";");
-   } else if (node->type == NODE_FUNCTION_CALL) {
-     if (node->body.function_call.type == 2) {
-       printf("abc");
-     } else {
-       printf("def");
-       add_to_output(current_output_position, output_length, output,
-                     node->body.function_call.name);
-       add_to_output(current_output_position, output_length, output, "(");
-       for (int i = 0; i < node->body.function_call.argument_count; i++) {
-         emit_expression(node->body.function_call.arguments[i], output,
-                       output_length, current_output_position);
-         if (i < node->body.function_call.argument_count - 1) {
-           add_to_output(current_output_position, output_length, output, ", ");
-         }
-       }
-       add_to_output(current_output_position, output_length, output, ");");
-     }
+  } else if (node->type == NODE_FUNCTION_CALL) {
+    if (node->body.function_call.type == 2) {
+      printf("abc");
+    } else {
+      printf("def");
+      add_to_output(current_output_position, output_length, output,
+                    node->body.function_call.name);
+      add_to_output(current_output_position, output_length, output, "(");
+      for (int i = 0; i < node->body.function_call.argument_count; i++) {
+        emit_expression(node->body.function_call.arguments[i], output,
+                        output_length, current_output_position);
+        if (i < node->body.function_call.argument_count - 1) {
+          add_to_output(current_output_position, output_length, output, ", ");
+        }
+      }
+      add_to_output(current_output_position, output_length, output, ");");
+    }
   }
 }
 
@@ -502,7 +502,15 @@ int main() {
   free(output);
 
   system("gcc temp.c -o temp.exe");
-  system(".\\temp.exe");
+#if defined(_WIN32)
+  system("gcc temp.c -o temp.exe");
+  system("temp.exe");
+#elif defined(__linux__) || defined(__APPLE__)
+  system("gcc temp.c -o temp");
+  system("./temp");
+#else
+  printf("Unsupported OS\n");
+#endif
 
   return 0;
 }
