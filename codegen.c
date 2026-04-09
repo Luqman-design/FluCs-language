@@ -336,6 +336,8 @@ void emit_statement(Node *node, char **output, int *output_length,
   } else if (node->type == NODE_VAR_DECLARATION) {
     if (node->body.var_declaration.variable_type == TOKEN_INT_TYPE) {
       add_to_output(current_output_position, output_length, output, "int ");
+    } else if (node->body.var_declaration.variable_type == TOKEN_STRING_TYPE) {
+      add_to_output(current_output_position, output_length, output, "char* ");
     }
     add_to_output(current_output_position, output_length, output,
                   node->body.var_declaration.variable_name);
@@ -343,9 +345,6 @@ void emit_statement(Node *node, char **output, int *output_length,
     emit_expression(node->body.var_declaration.variable_value, output,
                     output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, ";");
-  } else if (node->body.var_declaration.variable_type == TOKEN_STRING_TYPE) {
-    add_to_output(current_output_position, output_length, output,
-                  ""); // tilføjet denne
   } else if (node->type == NODE_VAR_UPDATE) {
     add_to_output(current_output_position, output_length, output,
                   node->body.var_update.variable_name);
