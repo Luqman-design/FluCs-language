@@ -293,14 +293,17 @@ void emit_function(Node *node, char **output, int *output_length,
     }
   }
 
-  add_to_output(current_output_position, output_length, output, ") {");
+  add_to_output(current_output_position, output_length, output, 
+    
+  ") {\n pthread_mutex_lock(&global_lock);\n");
 
   for (int i = 0; i < node->body.function.statement_count; i++) {
     emit_statement(node->body.function.statements[i], output, output_length,
                    current_output_position);
   }
 
-  add_to_output(current_output_position, output_length, output, "}");
+  add_to_output(current_output_position, output_length, output, 
+  "pthread_mutex_unlock(&global_lock);\n}\n");
 }
 
 void emit_statement(Node *node, char **output, int *output_length,
@@ -453,7 +456,9 @@ void emit_program(Node *node, char **output, int *output_length,
   if (node->type == NODE_PROGRAM) {
     add_to_output(current_output_position, output_length, output,
                   "#include <stdlib.h> \n\
-                   #include <stdio.h> \n");
+                   #include <stdio.h> \n\
+                   #include <pthread.h> \n\
+                   pthread_mutex_t global_lock; \n");
 
     for (int i = 0; i < node->body.program.statement_count; i++) {
       if (node->body.program.statements[i]->type == NODE_FUNCTION) {
@@ -463,7 +468,8 @@ void emit_program(Node *node, char **output, int *output_length,
     }
 
     add_to_output(current_output_position, output_length, output,
-                  "int main() {");
+                  "int main() {\n\
+                  pthread_mutex_init(&global_lock, NULL);\n");
 
     for (int i = 0; i < node->body.program.statement_count; i++) {
       if (node->body.program.statements[i]->type != NODE_FUNCTION) {
