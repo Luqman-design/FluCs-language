@@ -89,15 +89,16 @@ void add_to_output(int *current_output_position, int *output_length,
 // Note: Remember to add semicolon at the caller.
 void emit_function_call(Node *node, char **output, int *output_length,
                         int *current_output_position) {
-  // TODO: check function_call.type
-  // Example:
-  if (node->body.function_call.type == 2) {
-  } // Add prefix code for processes.
-  // Do the same with suffix code.
+  char *function_name = node->body.function_call.name;
+
+  if (node->body.function_call.type == 2) { // process (fire-and-forget)
+    char buffer[500];
+    snprintf(buffer, sizeof(buffer), "if(fork()==0){");
+    add_to_output(current_output_position, output_length, output, buffer);
+  }
 
   // Function name
-  add_to_output(current_output_position, output_length, output,
-                node->body.function_call.name);
+  add_to_output(current_output_position, output_length, output, function_name);
 
   // (
   add_to_output(current_output_position, output_length, output, "(");
@@ -113,6 +114,12 @@ void emit_function_call(Node *node, char **output, int *output_length,
 
   // )
   add_to_output(current_output_position, output_length, output, ")");
+
+  if (node->body.function_call.type == 2) { // process (fire-and-forget)
+    char buffer[500];
+    snprintf(buffer, sizeof(buffer), ";_exit(0);}");
+    add_to_output(current_output_position, output_length, output, buffer);
+  }
 }
 
 void emit_expression(Node *node, char **output, int *output_length,
