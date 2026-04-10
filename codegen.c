@@ -293,17 +293,14 @@ void emit_function(Node *node, char **output, int *output_length,
     }
   }
 
-  add_to_output(current_output_position, output_length, output, 
-    
-  ") {\n pthread_mutex_lock(&global_lock);\n");
+  add_to_output(current_output_position, output_length, output, ") {");
 
   for (int i = 0; i < node->body.function.statement_count; i++) {
     emit_statement(node->body.function.statements[i], output, output_length,
                    current_output_position);
   }
 
-  add_to_output(current_output_position, output_length, output, 
-  "pthread_mutex_unlock(&global_lock);\n}\n");
+  add_to_output(current_output_position, output_length, output, "}");
 }
 
 void emit_statement(Node *node, char **output, int *output_length,
@@ -359,6 +356,12 @@ void emit_statement(Node *node, char **output, int *output_length,
       add_to_output(current_output_position, output_length, output, ");");
     }
   } else if (node->type == NODE_VAR_DECLARATION) {
+    VariableEntry *var = lookup_variable(node->body.var_declaration.variable_name);
+    if (var && var->is_shared) {
+      char buffer[100];
+      snprintf(buffer, sizeof(buffer), "pthread_mutex_t lock_%s;\n", var->name);
+      add_to_output(current_output_position, output_length, output, buffer);
+    }
     if (node->body.var_declaration.variable_type == TOKEN_INT_TYPE) {
       add_to_output(current_output_position, output_length, output, "int ");
     } else if (node->body.var_declaration.variable_type == TOKEN_STRING_TYPE) {
@@ -366,11 +369,24 @@ void emit_statement(Node *node, char **output, int *output_length,
     }
     add_to_output(current_output_position, output_length, output,
                   node->body.var_declaration.variable_name);
+    
     add_to_output(current_output_position, output_length, output, "=");
     emit_expression(node->body.var_declaration.variable_value, output,
                     output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, ";");
   } else if (node->type == NODE_VAR_UPDATE) {
+
+    char *name = node->body.var_update.variable_name;
+
+    VariableEntry *var = lookup_variable(name);
+
+    // lock the variable if it's shared
+    if (var && var->is_shared) { 
+      char buffer[100];
+      snprintf(buffer, sizeof(buffer), "pthread_mutex_lock(&lock_%s);\n", var->name);
+      add_to_output(current_output_position, output_length, output, buffer);
+    }
+
     add_to_output(current_output_position, output_length, output,
                   node->body.var_update.variable_name);
 
@@ -394,7 +410,14 @@ void emit_statement(Node *node, char **output, int *output_length,
     emit_expression(node->body.var_update.value, output, output_length,
                     current_output_position);
 
-    add_to_output(current_output_position, output_length, output, ";");
+    add_to_output(current_output_position, output_length, output, ";"); 
+
+    // unclock the variable if it's shared after usage
+    if (var && var->is_shared) {
+      char buffer[100];
+      snprintf(buffer, sizeof(buffer), "pthread_mutex_unlock(&lock_%s);\n", var->name);
+      add_to_output(current_output_position, output_length, output, buffer);
+    }
   } else if (node->type == NODE_FOR_LOOP) {
     add_to_output(current_output_position, output_length, output, "for (");
 
@@ -457,8 +480,7 @@ void emit_program(Node *node, char **output, int *output_length,
     add_to_output(current_output_position, output_length, output,
                   "#include <stdlib.h> \n\
                    #include <stdio.h> \n\
-                   #include <pthread.h> \n\
-                   pthread_mutex_t global_lock; \n");
+                   #include <pthread.h> \n");
 
     for (int i = 0; i < node->body.program.statement_count; i++) {
       if (node->body.program.statements[i]->type == NODE_FUNCTION) {
@@ -468,8 +490,19 @@ void emit_program(Node *node, char **output, int *output_length,
     }
 
     add_to_output(current_output_position, output_length, output,
-                  "int main() {\n\
-                  pthread_mutex_init(&global_lock, NULL);\n");
+                  "int main() {\n");
+
+    // Initialize mutexes for shared variables
+    for (int i = 0; i <= scope_top; i++) {
+      VariableEntry *current, *tmp;
+      HASH_ITER(hh, scopes[i], current, tmp) {
+        if (current->is_shared) {
+          char buffer[100];
+          snprintf(buffer, sizeof(buffer), "pthread_mutex_init(&lock_%s, NULL);\n", current->name);
+          add_to_output(current_output_position, output_length, output, buffer);
+        }
+      }
+    }
 
     for (int i = 0; i < node->body.program.statement_count; i++) {
       if (node->body.program.statements[i]->type != NODE_FUNCTION) {
@@ -488,7 +521,7 @@ int main() {
                     print(i); \
                   } \
                 }\
-                process func_name(4);\n";
+                process func_name(4);\n"; 
   int output_length = 30;
   int current_output_position = 0;
   char *output = (char *)malloc((output_length + 1) * sizeof(char));
@@ -497,7 +530,7 @@ int main() {
 
   Node *root = parse(&lexer);
 
-  semantic_analysis(root);
+  semantic_analyze(root);
 
   emit_program(root, &output, &output_length, &current_output_position);
 

@@ -4,6 +4,7 @@
 
 #include "lexer.h"
 #include "parser.h"
+#include "semantic_analyzer.h"
 #include "uthash.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,17 +61,19 @@ steps:
 */
 #define MAX_SCOPE 100
 
-TokenType analyze_expression(Node *node);
-TokenType analyze_binary_operation(Node *node);
-
-typedef struct {
-  char name[32];
-  TokenType type;
-  UT_hash_handle hh;
-} VariableEntry;
-
 VariableEntry *scopes[MAX_SCOPE];
 int scope_top = -1;
+
+void enter_scope();
+void exit_scope();
+void insert_variable(const char *name, TokenType type);
+VariableEntry *lookup_variable(const char *name);
+void increment_variable_usage(const char *name);
+void check_operators(Node *node, char *error_message);
+void check_equality_operators(Node *node, char *error_message);
+TokenType analyze_binary_operation(Node *node);
+TokenType analyze_expression(Node *node);
+void analyze_node(Node *node);
 
 void enter_scope() {
   scope_top++;
@@ -100,6 +103,8 @@ void insert_variable(const char *name, TokenType type) {
   variable = malloc(sizeof(VariableEntry));
   strcpy(variable->name, name);
   variable->type = type;
+  variable->usage_count = 0;
+  variable->is_shared = 0;
 
   HASH_ADD_STR(scopes[scope_top], name, variable);
 }
@@ -115,6 +120,17 @@ VariableEntry *lookup_variable(const char *name) {
   }
 
   return NULL;
+}
+
+void increment_variable_usage(const char *name) {
+  VariableEntry *variable = lookup_variable(name);
+  
+  if (variable != NULL) {
+    variable->usage_count++;
+    if (variable->usage_count > 1) {
+      variable->is_shared = 1;
+    }
+  }
 }
 
 void check_operators(Node *node, char *error_message) {
@@ -187,6 +203,7 @@ TokenType analyze_expression(Node *node) {
       exit(1);
     }
     node->body.identifier.type = variable->type;
+    increment_variable_usage(node->body.identifier.name);
 
     return variable->type;
   }
@@ -253,6 +270,8 @@ void analyze_node(Node *node) {
              variable_name);
       exit(1);
     }
+    increment_variable_usage(variable_name);
+
     break;
   }
 
@@ -315,5 +334,6 @@ void analyze_node(Node *node) {
   }
 }
 
-void semantic_analysis(Node *root) { analyze_node(root); }
+void semantic_analyze(Node *root) { analyze_node(root); }
+
 

@@ -1,9 +1,28 @@
 #ifndef SEMANTIC_ANALYZER_H
 #define SEMANTIC_ANALYZER_H
 
-#include "parser.h"
 #include "lexer.h"
+#include "parser.h"
+#include "uthash.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-void semantic_analysis(Node *root);
+#define MAX_SCOPE 100
+
+typedef struct {
+  char name[32];
+  TokenType type;
+  int usage_count;
+  int is_shared;
+  UT_hash_handle hh;
+} VariableEntry;
+
+extern VariableEntry *scopes[MAX_SCOPE];
+extern int scope_top;
+
+VariableEntry *lookup_variable(const char *name);
+void semantic_analyze(Node *node);
+
 
 #endif
