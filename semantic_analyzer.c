@@ -109,6 +109,23 @@ void register_variable_usage(const char *name) {
   }
 }
 
+void insert_variable(const char *name, TokenType type) {
+  VariableEntry *variable;
+  HASH_FIND_STR(scopes[scope_top], name, variable);
+
+  if (variable != NULL) {
+    printf("Semantic error: Variable %s is already declared\n", name);
+    exit(1);
+  }
+
+  variable = malloc(sizeof(VariableEntry));
+  strcpy(variable->name, name);
+  variable->type = type;
+  variable->is_shared = 0;
+
+  HASH_ADD_STR(scopes[scope_top], name, variable);
+}
+
 VariableEntry *lookup_variable(const char *name) {
   // Loops through each scope, starting from the leaf/top (most nested scope)
   for (int i = scope_top; i >= 0; i--) {
@@ -246,6 +263,7 @@ void analyze_node(Node *node) {
              variable_name);
       exit(1);
     }
+    insert_variable(variable_name, variable_type); 
     register_variable_usage(variable_name);
     break;
   }
@@ -260,7 +278,7 @@ void analyze_node(Node *node) {
              variable_name);
       exit(1);
     }
-    increment_variable_usage(variable_name);
+    register_variable_usage(variable_name);
 
     break;
   }
