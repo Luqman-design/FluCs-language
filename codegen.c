@@ -72,6 +72,12 @@ int is_thread_function(const char *name) {
 void emit_statement(Node *node, char **output, int *output_length,
                     int *current_output_position);
 
+void emit_parallel_wrapper_functions(Node *node, char **output, int *output_length,
+                                     int *current_output_position);
+
+void emit_parallel_statement(Node *node, char **output, int *output_length,
+                             int *current_output_position);
+
 void emit_expression(Node *node, char **output, int *output_length,
                      int *current_output_position);
 
@@ -478,6 +484,8 @@ void emit_statement(Node *node, char **output, int *output_length,
     emit_expression(node->body.return_statement.expression, output,
                     output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, ";");
+  } else if (node->type == NODE_PARALLEL) {
+    emit_parallel_statement(node, output, output_length, current_output_position);
   } else if (node->type == NODE_FUNCTION_CALL) {
     emit_function_call(node, output, output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, ";");
@@ -525,8 +533,28 @@ void emit_program(Node *node, char **output, int *output_length,
       }
     }
 
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      if (node->body.program.statements[i]->type == NODE_PARALLEL) {
+        emit_parallel_wrapper_functions(node->body.program.statements[i], output,
+                                        output_length, current_output_position);
+      }
+    }
+
     add_to_output(current_output_position, output_length, output,
                   "int main() {\n");
+    
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      Node *stmt = node->body.program.statements[i];
+      if (stmt->type == NODE_VAR_DECLARATION &&
+          stmt->body.var_declaration.is_shared) {
+
+        char buffer[100];
+        snprintf(buffer, sizeof(buffer),
+                 "pthread_mutex_init(&lock_%s, NULL);",
+                 stmt->body.var_declaration.variable_name);
+        add_to_output(current_output_position, output_length, output, buffer);
+      }
+    }
 
     for (int i = 0; i < node->body.program.statement_count; i++) {
       if (node->body.program.statements[i]->type != NODE_FUNCTION) {
@@ -538,6 +566,56 @@ void emit_program(Node *node, char **output, int *output_length,
     add_to_output(current_output_position, output_length, output, "return 0;}");
   }
 }
+
+
+void emit_parallel_wrapper_functions(Node *node, char **output, int *output_length,
+                                     int *current_output_position) {
+  for (int i = 0; i < node->body.parallel.section_count; i++) {
+    char buffer[128];
+
+    snprintf(buffer, sizeof(buffer),
+             "void* parallel_%d_section_%d(void* arg) {",
+             node->body.parallel.parallel_id, i);
+    add_to_output(current_output_position, output_length, output, buffer);
+
+    emit_statement(node->body.parallel.sections[i], output, output_length,
+                   current_output_position);
+
+    add_to_output(current_output_position, output_length, output, "return NULL;}");
+  }
+}
+
+
+void emit_parallel_statement(Node *node, char **output, int *output_length,
+                             int *current_output_position) {
+  int count = node->body.parallel.section_count;
+
+  for (int i = 0; i < count; i++) {
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer),
+             "pthread_t parallel_%d_thread_%d;",
+             node->body.parallel.parallel_id, i);
+    add_to_output(current_output_position, output_length, output, buffer);
+  }
+
+  for (int i = 0; i < count; i++) {
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer),
+             "pthread_create(&parallel_%d_thread_%d, NULL, parallel_%d_section_%d, NULL);",
+             node->body.parallel.parallel_id, i,
+             node->body.parallel.parallel_id, i);
+    add_to_output(current_output_position, output_length, output, buffer);
+  }
+
+  for (int i = 0; i < count; i++) {
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer),
+             "pthread_join(parallel_%d_thread_%d, NULL);",
+             node->body.parallel.parallel_id, i);
+    add_to_output(current_output_position, output_length, output, buffer);
+  }
+}
+
 
 void emit_thread(Node *node, char **output, int *output_length,
                  int *current_output_position) {
@@ -556,6 +634,64 @@ void emit_thread(Node *node, char **output, int *output_length,
   add_to_output(current_output_position, output_length, output, 
                 "return NULL;}");
 }
+
+// int main(int argc, char *argv[]) {
+//   if (argc < 2) {
+//     fprintf(stderr, "Usage: %s <input-file>\n", argv[0]);
+//     return 1;
+//   }
+
+//   FILE *input = fopen(argv[1], "r");
+//   if (!input) {
+//     perror("fopen input file");
+//     return 1;
+//   }
+
+//   fseek(input, 0, SEEK_END);
+//   long file_size = ftell(input);
+//   rewind(input);
+
+//   char *str = malloc(file_size + 1);
+//   if (!str) {
+//     perror("malloc");
+//     fclose(input);
+//     return 1;
+//   }
+
+//   size_t bytes_read = fread(str, 1, file_size, input);
+//   str[bytes_read] = '\0';
+//   fclose(input);
+
+//   int output_length = 1024;
+//   int current_output_position = 0;
+//   char *output = (char *)malloc((output_length + 1) * sizeof(char));
+//   if (!output) {
+//     perror("malloc");
+//     free(str);
+//     return 1;
+//   }
+//   output[0] = '\0';
+
+//   Lexer lexer = new_lexer(str);
+
+//   Node *root = parse(&lexer);
+
+//   semantic_analyze(root);
+
+//   emit_program(root, &output, &output_length, &current_output_position);
+
+//   printf("\nResult:\n%s\n", output);
+
+//   FILE *f = fopen("temp.c", "w");
+//   if (!f) {
+//     perror("fopen temp.c");
+//     free(str);
+//     free(output);
+//     return 1;
+//   }
+
+//   fputs(output, f);
+//   fclose(f);
 
 int main() {
   char *str = 

@@ -41,6 +41,7 @@ typedef enum {
   TOKEN_AWAIT,
   TOKEN_SHARED,
   TOKEN_THREAD,
+  TOKEN_PARALLEL,
 
   // Symbols
   TOKEN_SEMICOLON,

@@ -24,6 +24,7 @@ typedef enum {
   NODE_STRING_VALUE,
   NODE_IDENTIFIER,
   NODE_THREAD,
+  NODE_PARALLEL,
 } NodeType;
 
 typedef struct Node {
@@ -112,6 +113,11 @@ typedef struct Node {
       struct Node **statements;
       int statement_count;
     } thread;
+    struct {
+      int parallel_id;
+      struct Node **sections;
+      int section_count;
+    } parallel;
   } body;
 } Node;
 

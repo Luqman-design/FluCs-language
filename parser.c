@@ -137,12 +137,15 @@ static Node *parse_term(Lexer *lexer);
 static Node *parse_factor(Lexer *lexer);
 static Node *parse_unary(Lexer *lexer);
 static Node *parse_primary(Lexer *lexer);
+static Node *parse_parallel_statement(Lexer *lexer);
 
 static int peek_after_identifier_is_left_paren(Lexer *lexer) {
   Lexer copy = *lexer;
   next_token(&copy);
   return next_token(&copy).type == TOKEN_LEFT_PAREN;
 }
+
+static int next_parallel_id = 0;
 
 /**
  * Parses the entire program as a sequence of statements.
@@ -196,6 +199,8 @@ static Node *parse_statement(Lexer *lexer) {
     return parse_if_statement(lexer);
   } else if (token.type == TOKEN_INT_TYPE || token.type == TOKEN_STRING_TYPE) {
     return parse_var_declaration(lexer);
+  } else if (token.type == TOKEN_PARALLEL) {
+    return parse_parallel_statement(lexer);  
   } else if (token.type == TOKEN_IDENTIFIER) {
     if (peek_after_identifier_is_left_paren(lexer)) {
       return parse_function_call(lexer);
@@ -443,6 +448,36 @@ static Node *parse_return_statement(Lexer *lexer) {
   consume(lexer, TOKEN_RETURN);
   node->body.return_statement.expression = parse_expression(lexer);
   consume(lexer, TOKEN_SEMICOLON);
+
+  return node;
+}
+
+static Node *parse_parallel_statement(Lexer *lexer) {
+  Node *node = malloc(sizeof(Node));
+  node->type = NODE_PARALLEL;
+  node->body.parallel.parallel_id = next_parallel_id++;
+
+  consume(lexer, TOKEN_PARALLEL);
+  consume(lexer, TOKEN_LEFT_CURLYBRACKET);
+
+  int section_count = 0;
+  int section_capacity = 4;
+  Node **sections = malloc(sizeof(Node *) * section_capacity);
+
+  while (peek(lexer).type != TOKEN_RIGHT_CURLYBRACKET) {
+    if (section_count >= section_capacity) {
+      section_capacity *= 2;
+      sections = realloc(sections, sizeof(Node *) * section_capacity);
+    }
+
+    sections[section_count] = parse_statement(lexer);
+    section_count++;
+  }
+
+  consume(lexer, TOKEN_RIGHT_CURLYBRACKET);
+
+  node->body.parallel.sections = sections;
+  node->body.parallel.section_count = section_count;
 
   return node;
 }

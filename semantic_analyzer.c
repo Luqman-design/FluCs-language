@@ -393,6 +393,22 @@ void analyze_node(Node *node)
     printf("Semantic error: Unsupported node type in semantic analysis\n");
     exit(1);
 
+    case NODE_PARALLEL:
+  {
+    for (int i = 0; i < node->body.parallel.section_count; i++)
+    {
+      int old_thread_id = current_thread_id;
+      current_thread_id = next_thread_id++;
+
+      enter_scope();
+      analyze_node(node->body.parallel.sections[i]);
+      exit_scope();
+
+      current_thread_id = old_thread_id;
+    }
+    break;
+  }
+
   case NODE_THREAD:
   {
     thread_functions[thread_function_count] = strdup(node->body.thread.name);
