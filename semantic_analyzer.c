@@ -74,6 +74,8 @@ void check_operators(Node *node, char *error_message);
 void check_equality_operators(Node *node, char *error_message);
 TokenType analyze_binary_operation(Node *node);
 TokenType analyze_expression(Node *node);
+void register_variable_usage(const char *name);
+void insert_variable(const char *name, TokenType type);
 void analyze_node(Node *node);
 
 void enter_scope()
@@ -84,33 +86,36 @@ void enter_scope()
 
 void exit_scope()
 {
-  VariableEntry *current, *tmp;
+/*   VariableEntry *current, *tmp;
 
-  HASH_ITER(hh, scopes[scope_top], current, tmp) {
+  HASH_ITER(hh, scopes[scope_top], current, tmp)
+  {
     HASH_DEL(scopes[scope_top], current);
     free(current);
-  }
+  } */
 
   scope_top--;
 }
 
 void register_variable_usage(const char *name)
 {
+  
   VariableEntry *var = lookup_variable(name);
-
   if (!var)
     return;
-
+  
   for (int i = 0; i < var->thread_count; i++)
   {
-    if (var->threads[i] == current_thread_id)
+    if (var->thread_ids[i] == current_thread_id)
       return;
   }
 
-  var->threads[var->thread_count] = current_thread_id;
-  var->thread_count++;
+  if (var->thread_count < 10)
+  {
+    var->thread_ids[var->thread_count++] = current_thread_id;
+  }
 
-  if (var->thread_count > 1)
+  if (var->thread_count >= 2)
   {
     var->is_shared = 1;
   }
@@ -268,6 +273,7 @@ void analyze_node(Node *node)
   {
   case NODE_PROGRAM:
     enter_scope();
+    current_thread_id = 0;
     for (int i = 0; i < node->body.program.statement_count; i++)
     {
       analyze_node(node->body.program.statements[i]);
@@ -295,31 +301,35 @@ void analyze_node(Node *node)
              variable_name);
       exit(1);
     }
+
     insert_variable(variable_name, variable_type);
+
     register_variable_usage(variable_name);
+
     VariableEntry *var = lookup_variable(variable_name);
-    if (var) {
+    if (var)
+    {
       node->body.var_declaration.is_shared = var->is_shared;
     }
     break;
   }
   case NODE_VAR_UPDATE:
   {
-    TokenType variable_type = analyze_expression(node->body.var_update.value);
     char *variable_name = node->body.var_update.variable_name;
 
-    VariableEntry *variable = lookup_variable(variable_name);
-
-    if (variable_type != variable->type)
-    {
-      printf("Semantic error: Type mismatch in variable update on %s\n",
-             variable_name);
-      exit(1);
-    }
     register_variable_usage(variable_name);
+
+    TokenType value_type = analyze_expression(node->body.var_update.value);
+
     VariableEntry *var = lookup_variable(variable_name);
     if (var) {
-        node->body.var_update.is_shared = var->is_shared;
+      node->body.var_update.is_shared = var->is_shared;
+    }
+
+    if (value_type != var->type)
+    {
+      printf("Semantic error: Type mismatch in variable update on %s\n", variable_name);
+      exit(1);
     }
 
     break;
@@ -394,6 +404,8 @@ void analyze_node(Node *node)
   {
     int old_thread_id = current_thread_id; // gemmer den gamle thread id
     current_thread_id = next_thread_id++;
+
+    printf("Entering thread %d\n", current_thread_id);
 
     enter_scope();
     for (int i = 0; i < node->body.thread.statement_count; i++)

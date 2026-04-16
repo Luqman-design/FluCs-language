@@ -39,7 +39,6 @@ typedef enum {
   TOKEN_RETURN,
   TOKEN_PROCESS,
   TOKEN_AWAIT,
-  TOKEN_SHARED,
   TOKEN_THREAD,
 
   // Symbols

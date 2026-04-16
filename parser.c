@@ -130,6 +130,7 @@ static Node *parse_for_loop(Lexer *lexer);
 static Node *parse_function(Lexer *lexer);
 static Node *parse_return_statement(Lexer *lexer);
 static Node *parse_function_call(Lexer *lexer);
+static Node *parse_thread(Lexer *lexer);
 static Node *parse_block(Lexer *lexer);
 static Node *parse_expression(Lexer *lexer);
 static Node *parse_comparison(Lexer *lexer);
@@ -209,6 +210,8 @@ static Node *parse_statement(Lexer *lexer) {
     return parse_return_statement(lexer);
   } else if (token.type == TOKEN_PROCESS) {
     return parse_function_call(lexer);
+  } else if (token.type == TOKEN_THREAD) {        
+    return parse_thread(lexer);
   }
 
   fprintf(stderr, "Error: Unexpected token '%s' of type '%d'\n",
@@ -731,14 +734,40 @@ static Node *parse_thread(Lexer *lexer) {
   
   consume(lexer, TOKEN_THREAD);
   
+  // Must have a name: thread myThread { ... }
   Token name_token = consume(lexer, TOKEN_IDENTIFIER);
   node->body.thread.name = name_token.value.string_value;
   
-  consume(lexer, TOKEN_LEFT_PAREN);
-  consume(lexer, TOKEN_RIGHT_PAREN);  
+  // We ignore () for now — just consume them if they exist, or make them optional
+  // But to keep it simple and close to your example:
+  if (peek(lexer).type == TOKEN_LEFT_PAREN) {
+    consume(lexer, TOKEN_LEFT_PAREN);
+    consume(lexer, TOKEN_RIGHT_PAREN);
+  }
   
-  consume(lexer, TOKEN_LEFT_CURLYBRACKET);
-  consume(lexer, TOKEN_RIGHT_CURLYBRACKET);
+  consume(lexer, TOKEN_LEFT_CURLYBRACKET);   // {
   
+  // Parse the body (statements)
+  int statement_count = 0;
+  int statement_capacity = 8;
+  Node **statements = malloc(sizeof(Node *) * statement_capacity);
+
+  while (peek(lexer).type != TOKEN_RIGHT_CURLYBRACKET && 
+         peek(lexer).type != TOKEN_EOF) {
+    
+    if (statement_count >= statement_capacity) {
+      statement_capacity *= 2;
+      statements = realloc(statements, sizeof(Node *) * statement_capacity);
+    }
+    
+    statements[statement_count] = parse_statement(lexer);
+    statement_count++;
+  }
+
+  consume(lexer, TOKEN_RIGHT_CURLYBRACKET);  // }
+
+  node->body.thread.statements = statements;
+  node->body.thread.statement_count = statement_count;
+
   return node;
 }

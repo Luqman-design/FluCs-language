@@ -2,5 +2,21 @@
                    #include <stdio.h> 
                    #include <pthread.h> 
                    #include <unistd.h>
+void* worker_one(void* arg) {
+pthread_mutex_lock(&lock_counter);
+counter=(counter+1);pthread_mutex_unlock(&lock_counter);
+pthread_mutex_lock(&lock_counter);
+counter=(counter+1);pthread_mutex_unlock(&lock_counter);
+  return NULL;
+}
+
+void* worker_two(void* arg) {
+pthread_mutex_lock(&lock_counter);
+counter=(counter+1);pthread_mutex_unlock(&lock_counter);
+  return NULL;
+}
+
 int main() {
-int x=0;if (1){x=(x+1);x=(x+1);}printf("%d", x);return 0;}
+int counter=0;printf("%d", counter);
+  return 0;
+}
