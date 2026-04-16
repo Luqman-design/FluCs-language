@@ -59,6 +59,16 @@ function codegen {
 #include <stdlib.h>
 #include <string.h>
 
+extern char *thread_functions[100];
+extern int thread_function_count;
+
+int is_thread_function(const char *name) {
+  for(int i = 0; i < thread_function_count; i++) {
+    if(strcmp(thread_functions[i], name) == 0) return 1;
+  }
+  return 0;
+}
+
 void emit_statement(Node *node, char **output, int *output_length,
                     int *current_output_position);
 
@@ -98,8 +108,15 @@ void emit_function_call(Node *node, char **output, int *output_length,
 {
   char *function_name = node->body.function_call.name;
 
-  if (node->body.function_call.type == 2)
-  { // process
+  if (is_thread_function(function_name)) {
+    // Generate thread creation
+    add_to_output(current_output_position, output_length, output, "{pthread_t t;pthread_create(&t,NULL,");
+    add_to_output(current_output_position, output_length, output, function_name);
+    add_to_output(current_output_position, output_length, output, ",NULL);}");
+    return;
+  }
+
+  if (node->body.function_call.type == 2) { // process
     char buffer[500];
     snprintf(buffer, sizeof(buffer), "if(fork()==0){");
     add_to_output(current_output_position, output_length, output, buffer);
