@@ -488,14 +488,16 @@ void emit_statement(Node *node, char **output, int *output_length,
   } else if (node->type == NODE_FUNCTION_CALL) {
     emit_function_call(node, output, output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, ";");
-  //MADS B
+
   } else if (node->type == NODE_AWAIT) {
-  add_to_output(current_output_position, output_length, output, "result = ");
-  add_to_output(current_output_position, output_length, output, node->body.thread.name);
-  add_to_output(current_output_position, output_length, output, "();\n");
-  emit_statement(pthread_join(node->body.thread.name, NULL));
-}
-  //MADS E
+    // node->body.thread.name contains the variable name (e.g., "res")
+    // Generate: pthread_join(thread_handles["res"], NULL);
+    char buffer[150];
+    snprintf(buffer, sizeof(buffer), "pthread_join(thread_handles[\"%s\"], NULL);\n",
+             node->body.thread.name);
+    add_to_output(current_output_position, output_length, output, buffer);
+  }
+
 }
 
 void emit_program(Node *node, char **output, int *output_length,
@@ -513,6 +515,10 @@ void emit_program(Node *node, char **output, int *output_length,
                    #include <stdio.h> \n\
                    #include <pthread.h> \n\
                    #include <unistd.h>\n");
+
+    // Declare thread handles array for await statements
+    add_to_output(current_output_position, output_length, output,
+                  "pthread_t thread_handles[100];\n");
 
     // Emit mutex declarations + init for shared variables
     for (int i = 0; i < node->body.program.statement_count; i++) {
