@@ -1,3 +1,24 @@
 #include <stdlib.h> 
                    #include <stdio.h> 
-int func_name(int a) {for (int i=0; (i<5); i+=1) {printf("%d", i);}}int main() {int fd_<func>[2];                     pipe(fd_<func>);                     pid_t pid_<func> = fork();                     if (pid_<func> == 0) {                        close(fd_<func>[0]);func_name(4);return 0;}
+                   #include <pthread.h> 
+                   #include <unistd.h>
+pthread_mutex_t lock_counter;
+pthread_mutex_init(&lock_counter, NULL);
+void* a(void* arg) {
+pthread_mutex_lock(&lock_counter);
+counter=(counter+1);pthread_mutex_unlock(&lock_counter);
+pthread_mutex_lock(&lock_counter);
+counter=(counter+1);pthread_mutex_unlock(&lock_counter);
+  return NULL;
+}
+
+void* b(void* arg) {
+pthread_mutex_lock(&lock_counter);
+counter=(counter+1);pthread_mutex_unlock(&lock_counter);
+  return NULL;
+}
+
+int main() {
+int counter=0;printf("%d", counter);
+  return 0;
+}
