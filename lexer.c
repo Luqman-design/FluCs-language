@@ -188,12 +188,16 @@ Token next_token(Lexer *lexer) {
         token.type = TOKEN_FUNCTION;
       } else if (strcmp(current_token_buffer, "process") == 0) {
         token.type = TOKEN_PROCESS;
+      } else if (strcmp(current_token_buffer, "thread") == 0) {
+        token.type = TOKEN_THREAD;
       } else if (strcmp(current_token_buffer, "return") == 0) {
         token.type = TOKEN_RETURN;
       } else if (strcmp(current_token_buffer, "await") == 0) {
         token.type = TOKEN_AWAIT;
       } else if (strcmp(current_token_buffer, "thread") == 0) {
         token.type = TOKEN_THREAD;
+      } else if (strcmp(current_token_buffer, "parallel") == 0) {
+        token.type = TOKEN_PARALLEL;
       }
 
       return token;

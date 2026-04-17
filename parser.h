@@ -24,6 +24,7 @@ typedef enum {
   NODE_STRING_VALUE,
   NODE_IDENTIFIER,
   NODE_THREAD,
+  NODE_PARALLEL,
   //MADS B
   NODE_AWAIT,
   //MADS E
@@ -68,6 +69,14 @@ typedef struct Node {
       struct Node *else_branch;
     } if_statement;
     struct {
+      /**
+       * Type:
+       * 0 - Regular for for loop
+       * 1 - Thread for loop
+       * 2 - Process for loop
+       */
+      int type;
+      int thread_amount;
       struct Node *initializer;
       struct Node *condition;
       struct Node *updater;
@@ -125,6 +134,11 @@ typedef struct Node {
       struct Node **statements;
       int statement_count;
     } thread;
+    struct {
+      int parallel_id;
+      struct Node **sections;
+      int section_count;
+    } parallel;
   } body;
 } Node;
 
