@@ -170,10 +170,12 @@ void emit_expression(Node *node, char **output, int *output_length,
     break;
   }
 
-  case NODE_STRING_VALUE:
-    add_to_output(current_output_position, output_length, output,
-                  node->body.string_value.value);
+  case NODE_STRING_VALUE: {
+    char quoted[256];
+    snprintf(quoted, sizeof(quoted), "\"%s\"", node->body.string_value.value);
+    add_to_output(current_output_position, output_length, output, quoted);
     break;
+  }
 
   case NODE_IDENTIFIER:
     add_to_output(current_output_position, output_length, output,
@@ -486,27 +488,21 @@ void emit_statement(Node *node, char **output, int *output_length,
       add_to_output(current_output_position, output_length, output, buffer);
       add_to_output(current_output_position, output_length, output, ");");
     }
-    if (node->body.print.print_value->type ==
-        NODE_STRING_VALUE) { // tilføjet denne
+    if (node->body.print.print_value->type == NODE_STRING_VALUE) {
       add_to_output(current_output_position, output_length, output,
                     "printf(\"%s\",");
-      add_to_output(current_output_position, output_length, output,
-                    node->body.print.print_value->body.string_value.value);
+      emit_expression(node->body.print.print_value, output, output_length,
+                      current_output_position);
       add_to_output(current_output_position, output_length, output, ");");
     } else if (node->body.print.print_value->type == NODE_IDENTIFIER) {
-      add_to_output(current_output_position, output_length, output, "printf(");
-
-      if (node->body.print.print_value->type == NODE_IDENTIFIER) {
-        if (node->body.print.print_value->body.identifier.type ==
-            TOKEN_INT_TYPE) {
-          char buffer[100];
-          snprintf(buffer, sizeof(buffer), "\"%%d\", %s",
-                   node->body.print.print_value->body.identifier.name);
-          add_to_output(current_output_position, output_length, output, buffer);
-        }
-      }
-
-      add_to_output(current_output_position, output_length, output, ");");
+      const char *fmt = (node->body.print.print_value->body.identifier.type ==
+                         TOKEN_STRING_TYPE)
+                            ? "\"%s\""
+                            : "\"%d\"";
+      char buffer[100];
+      snprintf(buffer, sizeof(buffer), "printf(%s, %s);", fmt,
+               node->body.print.print_value->body.identifier.name);
+      add_to_output(current_output_position, output_length, output, buffer);
     }
   } else if (node->type == NODE_VAR_DECLARATION) {
     if (node->body.var_declaration.variable_type == TOKEN_INT_TYPE)
@@ -652,16 +648,19 @@ void emit_statement(Node *node, char **output, int *output_length,
   } else if (node->type == NODE_FUNCTION_CALL) {
     emit_function_call(node, output, output_length, current_output_position);
     add_to_output(current_output_position, output_length, output, ";");
-  //MADS B
+    // MADS B
   } else if (node->type == NODE_AWAIT) {
-  add_to_output(current_output_position, output_length, output, "result = ");
-  add_to_output(current_output_position, output_length, output, node->body.thread.name);
-  add_to_output(current_output_position, output_length, output, "();\n");
-  add_to_output(current_output_position, output_length, output, "pthread_join(");
-  add_to_output(current_output_position, output_length, output, node->body.thread.name);
-  add_to_output(current_output_position, output_length, output, ", NULL);\n");
-}
-  //MADS E
+    add_to_output(current_output_position, output_length, output, "result = ");
+    add_to_output(current_output_position, output_length, output,
+                  node->body.thread.name);
+    add_to_output(current_output_position, output_length, output, "();\n");
+    add_to_output(current_output_position, output_length, output,
+                  "pthread_join(");
+    add_to_output(current_output_position, output_length, output,
+                  node->body.thread.name);
+    add_to_output(current_output_position, output_length, output, ", NULL);\n");
+  }
+  // MADS E
 }
 
 void emit_program(Node *node, char **output, int *output_length,
@@ -754,18 +753,9 @@ void emit_thread(Node *node, char **output, int *output_length,
                 "  return NULL;\n}\n");
 }
 
-int main()
-{
+int main() {
   char *str =
-      "int counter = 0; \
- thread a (){ \
-   counter = counter + 1; \
-   counter = counter + 1; \
- } \
- thread b (){ \
-   counter = counter + 1; \
- } \
- print(counter);";
+      "thread=2 for (int i = 0; i < 100; i = i+1) {print(i); print(\" - \");}";
 
   int output_length = 30;
   int current_output_position = 0;
@@ -776,9 +766,6 @@ int main()
   Node *root = parse(&lexer);
 
   semantic_analyze(root);
-
-  printf("DEBUG: counter is_shared = %d\n",
-         root->body.program.statements[0]->body.var_declaration.is_shared);
 
   emit_program(root, &output, &output_length, &current_output_position);
 
