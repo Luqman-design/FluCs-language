@@ -582,11 +582,18 @@ void emit_thread(Node *node, char **output, int *output_length,
                 "  return NULL;\n}\n");
 }
 
-int main() {
-  char *str = "func int _exp(int a) {return a*a;} \
-      int res = process _exp(10); \
-      await { res };\
-      print(res);";
+int main()
+{
+  char *str =
+      "int counter = 0; \
+ thread a (){ \
+   counter = counter + 1; \
+   counter = counter + 1; \
+ } \
+ thread b (){ \
+   counter = counter + 1; \
+ } \
+ print(counter);";
 
   int output_length = 30;
   int current_output_position = 0;
