@@ -1,5 +1,6 @@
-counter = 0;
+int counter = 0;
 thread=3 for (int i = 0; i < 100; i++) {
     print(i);
     counter += i;
+    print("\n");
 }

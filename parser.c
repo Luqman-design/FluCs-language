@@ -132,6 +132,12 @@ static Node *parse_statement(Lexer *lexer) {
   } else if (token.type == TOKEN_PROCESS) {
     return parse_function_call(lexer);
   } else if (token.type == TOKEN_THREAD) {
+    Lexer copy = *lexer;
+    next_token(&copy); // skip 'thread'
+    if (next_token(&copy).type == TOKEN_EQUAL) {
+      // thread=N for(...) — threaded for loop, let parse_for_loop handle it
+      return parse_for_loop(lexer);
+    }
     consume(lexer, TOKEN_THREAD);
     Node *node = parse_function_call(lexer);
     node->body.function_call.type = PARALLEL_TYPE_THREAD;
@@ -287,7 +293,11 @@ static Node *parse_var_update(Lexer *lexer)
     operator_type = TOKEN_EQUAL;
     consume(lexer, TOKEN_EQUAL);
   }
-  Node *expression = parse_expression(lexer);
+
+  Node *expression = NULL;
+  if (operator_type != TOKEN_PLUS_PLUS) {
+    expression = parse_expression(lexer);
+  }
 
   node->body.var_update.variable_name = variable_name.value.string_value;
   node->body.var_update._operator = operator_type;

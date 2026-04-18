@@ -26,7 +26,8 @@ static void emit_operand(Node *node, char **output, int *output_length,
 static void emit_thread_call_wrapper(Node *node, const char *result_var,
                                      int wrapper_id, char **output,
                                      int *output_length,
-                                     int *current_output_position);
+                                     int *current_output_position,
+                                     Node *program_node);
 static void emit_thread_call_inline(Node *node, const char *result_var,
                                     int wrapper_id, char **output,
                                     int *output_length,
@@ -51,30 +52,24 @@ static void add_to_output(int *pos, int *len, char **out, const char *str) {
 static const char *escape_string(const char *str, char *buf, int buf_size) {
   int j = 0;
   for (int i = 0; str[i] && j < buf_size - 2; i++) {
-    switch (str[i]) {
-    case '\\':
-      buf[j++] = '\\';
-      buf[j++] = '\\';
-      break;
-    case '"':
+    if (str[i] == '\\' && str[i + 1]) {
+      /* Pass through known escape sequences the lexer already captured */
+      buf[j++] = str[i++];
+      buf[j++] = str[i];
+    } else if (str[i] == '"') {
       buf[j++] = '\\';
       buf[j++] = '"';
-      break;
-    case '\n':
+    } else if (str[i] == '\n') {
       buf[j++] = '\\';
       buf[j++] = 'n';
-      break;
-    case '\t':
+    } else if (str[i] == '\t') {
       buf[j++] = '\\';
       buf[j++] = 't';
-      break;
-    case '\r':
+    } else if (str[i] == '\r') {
       buf[j++] = '\\';
       buf[j++] = 'r';
-      break;
-    default:
+    } else {
       buf[j++] = str[i];
-      break;
     }
   }
   buf[j] = '\0';
@@ -146,10 +141,24 @@ static void emit_operand(Node *node, char **output, int *output_length,
   }
 }
 
+static int find_function_return_type(Node *program_node, const char *fn_name) {
+  if (program_node->type != NODE_PROGRAM)
+    return TOKEN_VOID;
+  for (int i = 0; i < program_node->body.program.statement_count; i++) {
+    Node *stmt = program_node->body.program.statements[i];
+    if (stmt->type == NODE_FUNCTION &&
+        strcmp(stmt->body.function.name, fn_name) == 0) {
+      return stmt->body.function.return_type;
+    }
+  }
+  return TOKEN_VOID;
+}
+
 static void emit_thread_call_wrapper(Node *node, const char *result_var,
                                      int wrapper_id, char **output,
                                      int *output_length,
-                                     int *current_output_position) {
+                                     int *current_output_position,
+                                     Node *program_node) {
   const char *fn = node->body.function_call.name;
   int argc = node->body.function_call.argument_count;
 
@@ -163,8 +172,11 @@ static void emit_thread_call_wrapper(Node *node, const char *result_var,
   }
 
   if (result_var) {
-    add_to_output(current_output_position, output_length, output, result_var);
-    add_to_output(current_output_position, output_length, output, "=");
+    int ret_type = find_function_return_type(program_node, fn);
+    if (ret_type != TOKEN_VOID) {
+      add_to_output(current_output_position, output_length, output, result_var);
+      add_to_output(current_output_position, output_length, output, "=");
+    }
   }
 
   add_to_output(current_output_position, output_length, output, fn);
@@ -230,15 +242,16 @@ static void emit_all_thread_call_wrappers(Node *node, char **output,
     if (stmt->type == NODE_FUNCTION_CALL &&
         stmt->body.function_call.type == PARALLEL_TYPE_THREAD) {
       emit_thread_call_wrapper(stmt, NULL, wrapper_id, output, output_length,
-                               current_output_position);
+                               current_output_position, node);
       wrapper_id++;
     }
     if (stmt->type == NODE_VAR_DECLARATION &&
-        stmt->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_THREAD) {
+        stmt->body.var_declaration.variable_parallel_type ==
+            PARALLEL_TYPE_THREAD) {
       const char *result_var = stmt->body.var_declaration.variable_name;
       emit_thread_call_wrapper(stmt->body.var_declaration.variable_value,
                                result_var, wrapper_id, output, output_length,
-                               current_output_position);
+                               current_output_position, node);
       wrapper_id++;
     }
   }
@@ -261,7 +274,8 @@ static void emit_all_thread_call_inlines(Node *node, char **output,
       wrapper_id++;
     }
     if (stmt->type == NODE_VAR_DECLARATION &&
-        stmt->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_THREAD) {
+        stmt->body.var_declaration.variable_parallel_type ==
+            PARALLEL_TYPE_THREAD) {
       const char *result_var = stmt->body.var_declaration.variable_name;
       emit_thread_call_inline(stmt->body.var_declaration.variable_value,
                               result_var, wrapper_id, output, output_length,
@@ -554,8 +568,10 @@ static void emit_statement(Node *node, char **output, int *output_length,
       break;
     }
 
-    emit_expression(node->body.var_update.value, output, output_length,
-                    current_output_position);
+    if (node->body.var_update.value) {
+      emit_expression(node->body.var_update.value, output, output_length,
+                      current_output_position);
+    }
     add_to_output(current_output_position, output_length, output, ";");
 
     if (node->body.var_update.is_shared) {
@@ -611,8 +627,10 @@ static void emit_statement(Node *node, char **output, int *output_length,
     default:
       break;
     }
-    emit_expression(up->body.var_update.value, output, output_length,
-                    current_output_position);
+    if (up->body.var_update.value) {
+      emit_expression(up->body.var_update.value, output, output_length,
+                      current_output_position);
+    }
     add_to_output(current_output_position, output_length, output, ") {");
     emit_block(node->body.for_loop.body, output, output_length,
                current_output_position);
@@ -666,7 +684,8 @@ static void emit_program(Node *node, char **output, int *output_length,
   for (int i = 0; i < node->body.program.statement_count; i++) {
     Node *stmt = node->body.program.statements[i];
     if (stmt->type == NODE_VAR_DECLARATION &&
-        stmt->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_THREAD) {
+        stmt->body.var_declaration.variable_parallel_type ==
+            PARALLEL_TYPE_THREAD) {
       const char *name = stmt->body.var_declaration.variable_name;
       char buf[64];
       snprintf(buf, sizeof(buf), "%s %s = 0;\n",
@@ -675,10 +694,25 @@ static void emit_program(Node *node, char **output, int *output_length,
     }
   }
 
-  threaded_worker_counter = 1;
-  emit_threaded_for_loop_worker(node, output, output_length,
-                                current_output_position);
+  /* Emit top-level variable declarations globally so they're accessible
+     from threaded worker functions */
+  for (int i = 0; i < node->body.program.statement_count; i++) {
+    Node *stmt = node->body.program.statements[i];
+    if (stmt->type == NODE_VAR_DECLARATION &&
+        stmt->body.var_declaration.variable_parallel_type ==
+            PARALLEL_TYPE_REGULAR) {
+      char buf[64];
+      snprintf(buf, sizeof(buf),
+               "%s %s = ", c_type(stmt->body.var_declaration.variable_type),
+               stmt->body.var_declaration.variable_name);
+      add_to_output(current_output_position, output_length, output, buf);
+      emit_expression(stmt->body.var_declaration.variable_value, output,
+                      output_length, current_output_position);
+      add_to_output(current_output_position, output_length, output, ";\n");
+    }
+  }
 
+  /* Emit mutex declarations for shared variables before workers */
   for (int i = 0; i < node->body.program.statement_count; i++) {
     Node *stmt = node->body.program.statements[i];
     if (stmt->type == NODE_VAR_DECLARATION &&
@@ -687,11 +721,14 @@ static void emit_program(Node *node, char **output, int *output_length,
       snprintf(buf, sizeof(buf), "pthread_mutex_t lock_%s;\n",
                stmt->body.var_declaration.variable_name);
       add_to_output(current_output_position, output_length, output, buf);
-      snprintf(buf, sizeof(buf), "pthread_mutex_init(&lock_%s, NULL);\n",
-               stmt->body.var_declaration.variable_name);
-      add_to_output(current_output_position, output_length, output, buf);
     }
   }
+
+  threaded_worker_counter = 1;
+  emit_threaded_for_loop_worker(node, output, output_length,
+                                current_output_position);
+
+  /* Emit function definitions */
 
   for (int i = 0; i < node->body.program.statement_count; i++) {
     Node *stmt = node->body.program.statements[i];
@@ -706,6 +743,17 @@ static void emit_program(Node *node, char **output, int *output_length,
 
   add_to_output(current_output_position, output_length, output,
                 "int main() {\n");
+
+  for (int i = 0; i < node->body.program.statement_count; i++) {
+    Node *stmt = node->body.program.statements[i];
+    if (stmt->type == NODE_VAR_DECLARATION &&
+        stmt->body.var_declaration.is_shared) {
+      char buf[150];
+      snprintf(buf, sizeof(buf), "pthread_mutex_init(&lock_%s, NULL);\n",
+               stmt->body.var_declaration.variable_name);
+      add_to_output(current_output_position, output_length, output, buf);
+    }
+  }
 
   threaded_worker_counter = 1;
   thread_call_counter = 0;

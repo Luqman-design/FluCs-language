@@ -20,6 +20,11 @@ static int scope_top = -1;
 static int current_thread_id = 0;
 static int next_thread_id = 1;
 
+#define MAX_FUNCTIONS 100
+static Node *function_nodes[MAX_FUNCTIONS];
+static char *function_names[MAX_FUNCTIONS];
+static int function_count = 0;
+
 void enter_scope();
 void exit_scope();
 VariableEntry *lookup_variable(const char *name);
@@ -200,6 +205,29 @@ TokenType analyze_expression(Node *node) {
     for (int i = 0; i < node->body.function_call.argument_count; i++) {
       analyze_expression(node->body.function_call.arguments[i]);
     }
+    if (node->body.function_call.type == PARALLEL_TYPE_THREAD) {
+      Node *func = NULL;
+      for (int i = 0; i < function_count; i++) {
+        if (strcmp(function_names[i], node->body.function_call.name) == 0) {
+          func = function_nodes[i];
+          break;
+        }
+      }
+      if (func) {
+        int saved_thread_id = current_thread_id;
+        current_thread_id = next_thread_id++;
+        enter_scope();
+        for (int i = 0; i < func->body.function.param_count; i++) {
+          insert_variable(func->body.function.params[i].name,
+                          func->body.function.params[i].type, NULL);
+        }
+        for (int i = 0; i < func->body.function.statement_count; i++) {
+          analyze_node(func->body.function.statements[i]);
+        }
+        exit_scope();
+        current_thread_id = saved_thread_id;
+      }
+    }
     /* TODO: Look up function definition to determine actual return type.
      * Currently always returns TOKEN_INT_TYPE as a fallback. */
     return TOKEN_INT_TYPE;
@@ -253,8 +281,6 @@ void analyze_node(Node *node) {
 
     register_variable_usage(variable_name);
 
-    TokenType value_type = analyze_expression(node->body.var_update.value);
-
     VariableEntry *var = lookup_variable(variable_name);
     if (!var) {
       printf("Semantic error: Variable %s is not declared\n", variable_name);
@@ -265,10 +291,13 @@ void analyze_node(Node *node) {
     var->variable_declaration_node->body.var_declaration.is_shared =
         var->is_shared;
 
-    if (value_type != var->type) {
-      printf("Semantic error: Type mismatch in variable update on %s\n",
-             variable_name);
-      exit(1);
+    if (node->body.var_update.value) {
+      TokenType value_type = analyze_expression(node->body.var_update.value);
+      if (value_type != var->type) {
+        printf("Semantic error: Type mismatch in variable update on %s\n",
+               variable_name);
+        exit(1);
+      }
     }
 
     break;
@@ -298,10 +327,22 @@ void analyze_node(Node *node) {
       exit(1);
     }
     analyze_node(node->body.for_loop.updater);
-    analyze_node(node->body.for_loop.body);
+    if (node->body.for_loop.type == PARALLEL_TYPE_THREAD) {
+      int saved_thread_id = current_thread_id;
+      current_thread_id = next_thread_id++;
+      analyze_node(node->body.for_loop.body);
+      current_thread_id = saved_thread_id;
+    } else {
+      analyze_node(node->body.for_loop.body);
+    }
     break;
 
   case NODE_FUNCTION: {
+    if (function_count < MAX_FUNCTIONS) {
+      function_names[function_count] = node->body.function.name;
+      function_nodes[function_count] = node;
+      function_count++;
+    }
     enter_scope();
     for (int i = 0; i < node->body.function.param_count; i++) {
       insert_variable(node->body.function.params[i].name,
@@ -321,6 +362,29 @@ void analyze_node(Node *node) {
   case NODE_FUNCTION_CALL:
     for (int i = 0; i < node->body.function_call.argument_count; i++) {
       analyze_expression(node->body.function_call.arguments[i]);
+    }
+    if (node->body.function_call.type == PARALLEL_TYPE_THREAD) {
+      Node *func = NULL;
+      for (int i = 0; i < function_count; i++) {
+        if (strcmp(function_names[i], node->body.function_call.name) == 0) {
+          func = function_nodes[i];
+          break;
+        }
+      }
+      if (func) {
+        int saved_thread_id = current_thread_id;
+        current_thread_id = next_thread_id++;
+        enter_scope();
+        for (int i = 0; i < func->body.function.param_count; i++) {
+          insert_variable(func->body.function.params[i].name,
+                          func->body.function.params[i].type, NULL);
+        }
+        for (int i = 0; i < func->body.function.statement_count; i++) {
+          analyze_node(func->body.function.statements[i]);
+        }
+        exit_scope();
+        current_thread_id = saved_thread_id;
+      }
     }
     break;
 

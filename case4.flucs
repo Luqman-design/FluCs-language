@@ -1,11 +1,14 @@
-func int add(int a, int b) {
-    return a+b;
+int result = 0;
+
+func void add(int a, int b) {
+    result += a+b;
 }
 
-int result1 = process add(4, 7);
-int result2 = process add(20, 13);
-await { result1, result2 };
+int t1 = thread add(4, 7);
+int t2 = thread add(20, 13);
 
-print(result1);
-print(result2);
+await { t1, t2 };
+
+print(result);
+
 
