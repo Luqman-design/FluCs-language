@@ -762,6 +762,23 @@ static void emit_program(Node *node, char **output, int *output_length,
   emit_all_thread_call_inlines(node, output, output_length,
                                current_output_position);
 
+  /* Join unnamed threads before other statements */
+  {
+    int unnamed_count = 0;
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      Node *stmt = node->body.program.statements[i];
+      if (stmt->type == NODE_FUNCTION_CALL &&
+          stmt->body.function_call.type == PARALLEL_TYPE_THREAD) {
+        unnamed_count++;
+      }
+    }
+    for (int i = 1; i <= unnamed_count; i++) {
+      char buf[128];
+      snprintf(buf, sizeof(buf), "pthread_join(_thread__t%d, NULL);", i);
+      add_to_output(current_output_position, output_length, output, buf);
+    }
+  }
+
   for (int i = 0; i < node->body.program.statement_count; i++) {
     Node *stmt = node->body.program.statements[i];
     if (stmt->type == NODE_FUNCTION || stmt->type == NODE_VAR_DECLARATION ||

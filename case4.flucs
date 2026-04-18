@@ -4,10 +4,8 @@ func void add(int a, int b) {
     result += a+b;
 }
 
-int t1 = thread add(4, 7);
-int t2 = thread add(20, 13);
-
-await { t1, t2 };
+thread add(4, 7);
+thread add(20, 13);
 
 print(result);
 
