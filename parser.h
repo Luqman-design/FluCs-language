@@ -2,6 +2,15 @@
 #define PARSER_H
 #include "lexer.h"
 
+#define MAX_CAPTURED_VARS 20
+#define MAX_VAR_NAME_LEN 32
+
+typedef enum {
+  PARALLEL_TYPE_REGULAR,
+  PARALLEL_TYPE_THREAD,
+  PARALLEL_TYPE_PROCESS
+} ParallelType;
+
 typedef struct {
   TokenType type;
   char *name;
@@ -24,6 +33,7 @@ typedef enum {
   NODE_STRING_VALUE,
   NODE_IDENTIFIER,
   NODE_THREAD,
+  NODE_AWAIT,
 } NodeType;
 
 typedef struct Node {
@@ -38,24 +48,15 @@ typedef struct Node {
       int statement_count;
     } block;
     struct {
-      /**
-       * Due to that the value of the variable might not have been
-       * returned/resolved yet.
-       * Type:
-       *    0 - Regular function call
-       *    1 - Thread function call
-       *    2 - Process function call
-       */
-      int variable_parallel_type;
-
-      TokenType variable_type; // int | string
+      ParallelType variable_parallel_type;
+      TokenType variable_type;
       char *variable_name;
       struct Node *variable_value;
       int is_shared;
     } var_declaration;
     struct {
       char *variable_name;
-      TokenType _operator;
+      TokenType operator_type;
       struct Node *value;
       int is_shared;
     } var_update;
@@ -65,10 +66,16 @@ typedef struct Node {
       struct Node *else_branch;
     } if_statement;
     struct {
+      ParallelType type;
+      int thread_amount;
       struct Node *initializer;
       struct Node *condition;
       struct Node *updater;
       struct Node *body;
+      char captured_names[MAX_CAPTURED_VARS][MAX_VAR_NAME_LEN];
+      TokenType captured_types[MAX_CAPTURED_VARS];
+      int captured_count;
+      int worker_id;
     } for_loop;
     struct {
       TokenType return_type;
@@ -87,12 +94,6 @@ typedef struct Node {
       struct Node *expression;
     } return_statement;
     struct {
-      /**
-       * Type:
-       * 0 - Regular function call
-       * 1 - Thread function call
-       * 2 - Process function call
-       */
       int type;
       char *name;
       struct Node **arguments;
@@ -114,7 +115,7 @@ typedef struct Node {
       char *value;
     } string_value;
     struct {
-      TokenType type; // Assigned at semantic analysis
+      TokenType type;
       char *name;
     } identifier;
     struct {
@@ -126,5 +127,6 @@ typedef struct Node {
 } Node;
 
 Node *parse(Lexer *lexer);
+void free_node(Node *node);
 
 #endif

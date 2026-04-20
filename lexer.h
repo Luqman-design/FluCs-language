@@ -7,6 +7,7 @@ typedef enum {
   TOKEN_INT_VALUE,
   TOKEN_STRING_TYPE,
   TOKEN_STRING_VALUE,
+  TOKEN_VOID,
 
   // Variable
   TOKEN_IDENTIFIER,
@@ -70,6 +71,8 @@ typedef struct {
     int int_value;
   } value;
 } Token;
+
+void free_token(Token *token);
 
 typedef struct {
   char *input;
