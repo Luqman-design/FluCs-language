@@ -88,13 +88,13 @@ void enter_scope() {
 }
 
 void exit_scope() {
-  /*   VariableEntry *current, *tmp;
+  VariableEntry *current, *tmp;
 
     HASH_ITER(hh, scopes[scope_top], current, tmp)
     {
       HASH_DEL(scopes[scope_top], current);
       free(current);
-    } */
+    } 
 
   scope_top--;
 }
