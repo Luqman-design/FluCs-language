@@ -58,6 +58,8 @@ run_test "case14.flucs" "45"    "process in for loop"
 run_test "case15.flucs" "15300" "thread void func in if"
 run_test "case16.flucs" "20"    "thread in nested if"
 run_test "case17.flucs" "70"    "thread in else branch"
+run_test "case18.flucs" "30"    "process with local var args"
+run_test "case19.flucs" "42"    "process in if with local vars"
 
 echo
 echo "Results: $PASS passed, $FAIL failed, $TOTAL total"

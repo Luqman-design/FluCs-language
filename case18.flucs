@@ -1,0 +1,9 @@
+func int add(int a, int b) {
+    return a + b;
+}
+
+int x = 10;
+int y = 20;
+int result = process add(x, y);
+await { result };
+print(result);

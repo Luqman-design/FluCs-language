@@ -393,12 +393,12 @@ static void emit_all_process_call_wrappers(Node *node, OutputBuffer *output) {
       const char *function_name = call_node->body.function_call.name;
       int argc = call_node->body.function_call.argument_count;
 
-      output_appendf(output, "void process_call_%d(int* result) {", pid);
+      output_appendf(output, "void process_call_%d(int* result, intptr_t* args) {", pid);
       output_append(output, "*result=");
       output_append(output, function_name);
       output_append(output, "(");
       for (int j = 0; j < argc; j++) {
-        emit_expression(call_node->body.function_call.arguments[j], output);
+        output_appendf(output, "(int)args[%d]", j);
         if (j < argc - 1)
           output_append(output, ", ");
       }
@@ -714,13 +714,27 @@ static void emit_statement(Node *node, OutputBuffer *output, Node *program_node)
     } else if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_PROCESS) {
       int pid = node->body.var_declaration.process_id;
       const char *ctype = c_type(node->body.var_declaration.variable_type);
+      Node *call_node = node->body.var_declaration.variable_value;
+      int argc = call_node->body.function_call.argument_count;
+      char args_name[32];
+      snprintf(args_name, sizeof(args_name), "_args_p%d", pid);
 
+      if (argc > 0) {
+        output_appendf(output, "intptr_t %s[%d]={", args_name, argc);
+        for (int i = 0; i < argc; i++) {
+          emit_expression(call_node->body.function_call.arguments[i], output);
+          if (i < argc - 1)
+            output_append(output, ", ");
+        }
+        output_append(output, "};");
+      }
       output_appendf(output, "%s %s = 0; int* %s_ptr = mmap(NULL, sizeof(int), "
                      "PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); "
                      "*%s_ptr = 0; pid_t _process_%s = fork(); "
-                     "if (_process_%s == 0) { process_call_%d(%s_ptr); } ",
-                     ctype, var_name, var_name, var_name, var_name, var_name, pid, var_name);
-      output_appendf(output, "pthread_t _thread_%s;", var_name);
+                     "if (_process_%s == 0) { process_call_%d(%s_ptr, %s); } "
+                     "pthread_t _thread_%s;",
+                     ctype, var_name, var_name, var_name, var_name, var_name, pid,
+                     var_name, argc > 0 ? args_name : "NULL", var_name);
     } else {
       output_append(output, c_type(node->body.var_declaration.variable_type));
       output_append(output, " ");
@@ -1009,7 +1023,7 @@ static void emit_wrapper_forward_decls(Node *node, OutputBuffer *output) {
                      node->body.var_declaration.wrapper_id);
     }
     if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_PROCESS) {
-      output_appendf(output, "void process_call_%d(int*);\n",
+      output_appendf(output, "void process_call_%d(int*, intptr_t*);\n",
                      node->body.var_declaration.process_id);
     }
     break;

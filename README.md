@@ -82,24 +82,25 @@ await { val };
 print(val);
 ```
 
-The codegen emits a process wrapper function that writes the result and exits:
+The codegen emits a process wrapper function that unpacks arguments from an `intptr_t` array, writes the result, and exits:
 
 ```c
-void process_call_1(int* result) {
-    *result = compute(21);
+void process_call_1(int* result, intptr_t* args) {
+    *result = compute((int)args[0]);
     exit(0);
 }
 ```
 
-At the call site, shared memory is allocated, the process is forked, and the child runs the wrapper:
+At the call site, arguments are packed into an array on the stack. Shared memory is allocated for the result, the process is forked, and the child runs the wrapper:
 
 ```c
+intptr_t _args_p1[1] = { 21 };
 int val = 0;
 int* val_ptr = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE,
                     MAP_SHARED|MAP_ANONYMOUS, -1, 0);
 *val_ptr = 0;
 pid_t _process_val = fork();
-if (_process_val == 0) { process_call_1(val_ptr); }
+if (_process_val == 0) { process_call_1(val_ptr, _args_p1); }
 ```
 
 The parent later collects the result with `waitpid`:
@@ -109,7 +110,7 @@ waitpid(_process_val, NULL, 0);
 val = *val_ptr;
 ```
 
-Processes are heavier than threads but provide full memory isolation. Arguments in the wrapper are evaluated at `fork()` time, so only values available at that point (constants, globals) work correctly — local variables from the parent are not accessible in the wrapper function.
+Processes are heavier than threads but provide full memory isolation. Arguments are evaluated at the call site before `fork()` and passed to the wrapper through an `intptr_t` array, the same pattern used by thread wrappers. Local variables, constants, and expressions all work as arguments.
 
 ### 3. Thread Blocks
 
@@ -213,15 +214,15 @@ await { a, b };
 
 ## Shared Variable Detection
 
-The semantic analyzer tracks which thread context each variable is accessed from. When a variable is read or written by two or more different thread contexts, it is automatically marked `is_shared`. Shared variables get a `pthread_mutex_t` guard — every read/write is wrapped in lock/unlock.
+The semantic analyzer tracks which thread context each variable is accessed from. When a variable is read or written by two or more different thread contexts, it is automatically marked `is_shared`. Shared variables get a `pthread_mutex_t` guard, where every read/write is wrapped in lock/unlock.
 
 This detection is scope-aware. The analyzer maintains a scope stack with `uthash` hash tables. Each variable entry records which `thread_id`s have accessed it. The `thread_id` changes when entering a thread call, thread block, or parallel for loop body.
 
-For parallel for loops, the analyzer also detects **captured variables** — variables from an outer scope that the loop body references. Captured variables are passed to worker functions by pointer, along with their associated mutex, via the `intptr_t` argument array.
+For parallel for loops, the analyzer also detects **captured variables**, which are variables from an outer scope that the loop body references. Captured variables are passed to worker functions by pointer, along with their associated mutex, via the `intptr_t` argument array.
 
 ## Nesting
 
-All concurrency primitives work at any nesting depth — inside `if`/`else` branches, `for` loops, function bodies, or other thread/process contexts:
+All concurrency primitives work at any nesting depth, including inside `if`/`else` branches, `for` loops, function bodies, or other thread/process contexts:
 
 ```
 func int add(int a, int b) { return a + b; }
@@ -250,4 +251,4 @@ The compiler writes generated C to `temp.c`, compiles it with `gcc`, and runs th
 ./test.sh
 ```
 
-Runs all 17 test cases covering top-level and nested thread, process, thread block, and parallel for loop usage.
+Runs all 19 test cases covering top-level and nested thread, process, thread block, and parallel for loop usage.

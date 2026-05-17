@@ -5,12 +5,11 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
-int counter = 0;
-pthread_mutex_t lock_counter;
-void* thread_call_1(void*);
-void* thread_call_1(void* arg) {pthread_mutex_lock(&lock_counter);counter+=10;pthread_mutex_unlock(&lock_counter);pthread_mutex_lock(&lock_counter);counter+=10;pthread_mutex_unlock(&lock_counter);pthread_mutex_lock(&lock_counter);counter+=10;pthread_mutex_unlock(&lock_counter);return NULL;}
+void process_call_1(int*, intptr_t*);
+int mul(int a, int b) {return (a*b);}
+
+void process_call_1(int* result, intptr_t* args) {*result=mul((int)args[0], (int)args[1]);exit(0);}
 int main() {
-pthread_mutex_init(&lock_counter, NULL);
-pthread_t _thread_tw_1;pthread_create(&_thread_tw_1,NULL,thread_call_1,NULL);pthread_join(_thread_tw_1, NULL);printf("%d",counter);
+int total = 0;if (1){int a=7;int b=6;intptr_t _args_p1[2]={a, b};int r = 0; int* r_ptr = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); *r_ptr = 0; pid_t _process_r = fork(); if (_process_r == 0) { process_call_1(r_ptr, _args_p1); } pthread_t _thread_r;waitpid(_process_r, NULL, 0); r = *r_ptr;total=r;}printf("%d",total);
   return 0;
 }
