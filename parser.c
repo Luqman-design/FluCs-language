@@ -151,6 +151,7 @@ static Node *parse_statement(Lexer *lexer) {
       consume(lexer, TOKEN_RIGHT_CURLYBRACKET);
       node->body.thread.statements = statements;
       node->body.thread.statement_count = count;
+      node->body.thread.wrapper_id = 0;
       return node;
     } else {
       consume(lexer, TOKEN_THREAD);
@@ -274,6 +275,8 @@ static Node *parse_var_declaration(Lexer *lexer)
 
   node->body.var_declaration.variable_name = variable_name.value.string_value;
   node->body.var_declaration.variable_value = expression;
+  node->body.var_declaration.wrapper_id = 0;
+  node->body.var_declaration.process_id = 0;
 
   return node;
 }
@@ -467,6 +470,7 @@ static Node *parse_function_call(Lexer *lexer) {
   node->type = NODE_FUNCTION_CALL;
 
   node->body.function_call.type = PARALLEL_TYPE_REGULAR;
+  node->body.function_call.wrapper_id = 0;
   if (peek(lexer).type == TOKEN_PROCESS) {
     node->body.function_call.type = PARALLEL_TYPE_PROCESS;
     consume(lexer, TOKEN_PROCESS);

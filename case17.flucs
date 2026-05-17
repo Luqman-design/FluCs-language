@@ -1,0 +1,15 @@
+func int add(int a, int b) {
+    return a + b;
+}
+
+int result = 0;
+
+if (0) {
+    result = 99;
+} else {
+    int r = thread add(30, 40);
+    await { r };
+    result = r;
+}
+
+print(result);

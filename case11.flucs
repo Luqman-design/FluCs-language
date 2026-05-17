@@ -1,0 +1,14 @@
+func int add(int a, int b) {
+    return a + b;
+}
+
+func int compute(int x, int y) {
+    int r = thread add(x, y);
+    await { r };
+    return r;
+}
+
+int a = compute(3, 7);
+int b = compute(10, 20);
+print(a);
+print(b);

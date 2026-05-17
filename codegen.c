@@ -50,6 +50,10 @@ static char captured_names[MAX_CAPTURED][32];
 static int captured_count = 0;
 static int saved_captured_count = 0;
 
+#define MAX_PROCESS_VARS 64
+static char process_var_names[MAX_PROCESS_VARS][32];
+static int process_var_count = 0;
+
 static int is_captured_var(const char *name) {
   for (int i = 0; i < captured_count; i++) {
     if (strcmp(captured_names[i], name) == 0)
@@ -58,19 +62,113 @@ static int is_captured_var(const char *name) {
   return 0;
 }
 
-/* Forward declarations */
+static int is_process_variable(const char *name) {
+  for (int i = 0; i < process_var_count; i++) {
+    if (strcmp(process_var_names[i], name) == 0)
+      return 1;
+  }
+  return 0;
+}
+
+static int find_function_return_type(Node *program_node, const char *function_name) {
+  if (program_node->type != NODE_PROGRAM)
+    return TOKEN_VOID;
+  for (int i = 0; i < program_node->body.program.statement_count; i++) {
+    Node *stmt = program_node->body.program.statements[i];
+    if (stmt->type == NODE_FUNCTION &&
+        strcmp(stmt->body.function.name, function_name) == 0) {
+      return stmt->body.function.return_type;
+    }
+  }
+  return TOKEN_VOID;
+}
+
+static void assign_parallel_ids(Node *node) {
+  static int next_wrapper_id = 1;
+  static int next_process_id = 1;
+
+  if (!node)
+    return;
+
+  switch (node->type) {
+  case NODE_PROGRAM:
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      assign_parallel_ids(node->body.program.statements[i]);
+    }
+    break;
+  case NODE_BLOCK:
+    for (int i = 0; i < node->body.block.statement_count; i++) {
+      assign_parallel_ids(node->body.block.statements[i]);
+    }
+    break;
+  case NODE_FUNCTION:
+    for (int i = 0; i < node->body.function.statement_count; i++) {
+      assign_parallel_ids(node->body.function.statements[i]);
+    }
+    break;
+  case NODE_IF_STATEMENT:
+    assign_parallel_ids(node->body.if_statement.then_branch);
+    if (node->body.if_statement.else_branch) {
+      assign_parallel_ids(node->body.if_statement.else_branch);
+    }
+    break;
+  case NODE_FOR_LOOP:
+    assign_parallel_ids(node->body.for_loop.initializer);
+    assign_parallel_ids(node->body.for_loop.body);
+    break;
+  case NODE_VAR_DECLARATION:
+    if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_THREAD) {
+      node->body.var_declaration.wrapper_id = next_wrapper_id++;
+      if (node->body.var_declaration.variable_value &&
+          node->body.var_declaration.variable_value->type == NODE_FUNCTION_CALL) {
+        node->body.var_declaration.variable_value->body.function_call.wrapper_id =
+            node->body.var_declaration.wrapper_id;
+      }
+    }
+    if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_PROCESS) {
+      node->body.var_declaration.process_id = next_process_id++;
+      if (node->body.var_declaration.variable_value &&
+          node->body.var_declaration.variable_value->type == NODE_FUNCTION_CALL) {
+        node->body.var_declaration.variable_value->body.function_call.wrapper_id =
+            node->body.var_declaration.wrapper_id;
+      }
+      if (process_var_count < MAX_PROCESS_VARS) {
+        strcpy(process_var_names[process_var_count],
+               node->body.var_declaration.variable_name);
+        process_var_count++;
+      }
+    }
+    break;
+  case NODE_FUNCTION_CALL:
+    if (node->body.function_call.type == PARALLEL_TYPE_THREAD) {
+      node->body.function_call.wrapper_id = next_wrapper_id++;
+    }
+    if (node->body.function_call.type == PARALLEL_TYPE_PROCESS) {
+    }
+    break;
+  case NODE_THREAD:
+    node->body.thread.wrapper_id = next_wrapper_id++;
+    for (int i = 0; i < node->body.thread.statement_count; i++) {
+      assign_parallel_ids(node->body.thread.statements[i]);
+    }
+    break;
+  case NODE_AWAIT:
+    break;
+  default:
+    break;
+  }
+}
+
+static void reset_parallel_ids(void) {
+  process_var_count = 0;
+}
+
 static void emit_statement(Node *node, OutputBuffer *output, Node *program_node);
 static void emit_expression(Node *node, OutputBuffer *output);
 static void emit_function(Node *node, OutputBuffer *output);
 static void emit_block(Node *node, OutputBuffer *output, Node *program_node);
 static void emit_operand(Node *node, OutputBuffer *output);
-static void emit_thread_call_wrapper(Node *node, const char *result_var,
-                                     int wrapper_id, OutputBuffer *output,
-                                     Node *program_node);
-static void emit_thread_call_inline(Node *node, const char *result_var,
-                                    int wrapper_id, OutputBuffer *output);
-static void emit_all_thread_call_wrappers(Node *node, OutputBuffer *output);
-static void emit_threaded_for_loop_worker(Node *node, OutputBuffer *output);
+static const char *c_type(TokenType t);
 
 static const char *escape_string(const char *str, char *buf, int buf_size) {
   int j = 0;
@@ -160,154 +258,156 @@ static void emit_operand(Node *node, OutputBuffer *output) {
   }
 }
 
-static int is_process_variable(Node *program_node, const char *name) {
-  if (program_node->type != NODE_PROGRAM)
-    return 0;
-  for (int i = 0; i < program_node->body.program.statement_count; i++) {
-    Node *stmt = program_node->body.program.statements[i];
-    if (stmt->type == NODE_VAR_DECLARATION &&
-        strcmp(stmt->body.var_declaration.variable_name, name) == 0 &&
-        stmt->body.var_declaration.variable_parallel_type ==
-            PARALLEL_TYPE_PROCESS) {
-      return 1;
-    }
-  }
-  return 0;
-}
-
-static int find_function_return_type(Node *program_node, const char *function_name) {
-  if (program_node->type != NODE_PROGRAM)
-    return TOKEN_VOID;
-  for (int i = 0; i < program_node->body.program.statement_count; i++) {
-    Node *stmt = program_node->body.program.statements[i];
-    if (stmt->type == NODE_FUNCTION &&
-        strcmp(stmt->body.function.name, function_name) == 0) {
-      return stmt->body.function.return_type;
-    }
-  }
-  return TOKEN_VOID;
-}
-
-static void emit_thread_call_wrapper(Node *node, const char *result_var,
-                                     int wrapper_id, OutputBuffer *output,
-                                     Node *program_node) {
-  const char *function_name = node->body.function_call.name;
-  int argc = node->body.function_call.argument_count;
+static void emit_thread_call_wrapper_for_node(Node *call_node, const char *result_var,
+                                              int wrapper_id, OutputBuffer *output,
+                                              Node *program_node) {
+  const char *function_name = call_node->body.function_call.name;
+  int argc = call_node->body.function_call.argument_count;
 
   output_appendf(output, "void* thread_call_%d(void* arg) {", wrapper_id);
-
-  if (argc > 0) {
-    output_append(output, "intptr_t* args=(intptr_t*)arg;");
-  }
 
   if (result_var) {
     int ret_type = find_function_return_type(program_node, function_name);
     if (ret_type != TOKEN_VOID) {
-      output_append(output, result_var);
-      output_append(output, "=");
+      if (argc > 0) {
+        output_append(output, "intptr_t* args=(intptr_t*)arg;");
+        output_appendf(output, "*(%s*)args[0]=%s(", c_type(ret_type), function_name);
+        for (int i = 0; i < argc; i++) {
+          output_appendf(output, "(int)args[%d]", i + 1);
+          if (i < argc - 1)
+            output_append(output, ", ");
+        }
+        output_append(output, ");");
+      } else {
+        output_appendf(output, "*(%s*)((intptr_t*)arg)[0]=%s();",
+                       c_type(ret_type), function_name);
+      }
     }
-  }
-
-  output_append(output, function_name);
-  output_append(output, "(");
-  for (int i = 0; i < argc; i++) {
-    output_appendf(output, "(int)args[%d]", i);
-    if (i < argc - 1)
-      output_append(output, ", ");
-  }
-  output_append(output, ");");
-  output_append(output, "return NULL;}\n");
-}
-
-static void emit_thread_call_inline(Node *node, const char *result_var,
-                                    int wrapper_id, OutputBuffer *output) {
-  int argc = node->body.function_call.argument_count;
-
-  output_appendf(output, "pthread_t _thread_%s; pid_t _process_%s = -1;", result_var,
-             result_var);
-
-  if (argc > 0) {
-    char arr_name[64];
-    snprintf(arr_name, sizeof(arr_name), "_args_%s", result_var);
-    output_appendf(output, "intptr_t %s[%d]={", arr_name, argc);
+  } else {
+    if (argc > 0) {
+      output_append(output, "intptr_t* args=(intptr_t*)arg;");
+    }
+    output_append(output, function_name);
+    output_append(output, "(");
     for (int i = 0; i < argc; i++) {
-      emit_expression(node->body.function_call.arguments[i], output);
+      output_appendf(output, "(int)args[%d]", i);
       if (i < argc - 1)
         output_append(output, ", ");
     }
-    output_append(output, "};");
+    output_append(output, ");");
   }
 
-  output_appendf(output, "pthread_create(&_thread_%s,NULL,thread_call_%d,", result_var,
-             wrapper_id);
+  output_append(output, "return NULL;}\n");
+}
 
-  if (argc > 0) {
-    char arr_name[64];
-    snprintf(arr_name, sizeof(arr_name), "_args_%s", result_var);
-    output_appendf(output, "%s);", arr_name);
-  } else {
-    output_append(output, "NULL);");
+static void emit_all_thread_call_wrappers(Node *node, OutputBuffer *output, Node *program_node) {
+  if (!node)
+    return;
+
+  switch (node->type) {
+  case NODE_PROGRAM:
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      emit_all_thread_call_wrappers(node->body.program.statements[i], output, program_node);
+    }
+    break;
+  case NODE_BLOCK:
+    for (int i = 0; i < node->body.block.statement_count; i++) {
+      emit_all_thread_call_wrappers(node->body.block.statements[i], output, program_node);
+    }
+    break;
+  case NODE_FUNCTION:
+    for (int i = 0; i < node->body.function.statement_count; i++) {
+      emit_all_thread_call_wrappers(node->body.function.statements[i], output, program_node);
+    }
+    break;
+  case NODE_IF_STATEMENT:
+    emit_all_thread_call_wrappers(node->body.if_statement.then_branch, output, program_node);
+    if (node->body.if_statement.else_branch) {
+      emit_all_thread_call_wrappers(node->body.if_statement.else_branch, output, program_node);
+    }
+    break;
+  case NODE_FOR_LOOP:
+    emit_all_thread_call_wrappers(node->body.for_loop.body, output, program_node);
+    break;
+  case NODE_VAR_DECLARATION:
+    if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_THREAD) {
+      int wid = node->body.var_declaration.wrapper_id;
+      const char *var_name = node->body.var_declaration.variable_name;
+      Node *call_node = node->body.var_declaration.variable_value;
+      emit_thread_call_wrapper_for_node(call_node, var_name, wid, output, program_node);
+    }
+    break;
+  case NODE_FUNCTION_CALL:
+    if (node->body.function_call.type == PARALLEL_TYPE_THREAD) {
+      int wid = node->body.function_call.wrapper_id;
+      emit_thread_call_wrapper_for_node(node, NULL, wid, output, program_node);
+    }
+    break;
+  case NODE_THREAD: {
+    int wid = node->body.thread.wrapper_id;
+    output_appendf(output, "void* thread_call_%d(void* arg) {", wid);
+    for (int j = 0; j < node->body.thread.statement_count; j++) {
+      emit_statement(node->body.thread.statements[j], output, program_node);
+    }
+    output_append(output, "return NULL;}\n");
+    break;
+  }
+  default:
+    break;
   }
 }
 
-static void emit_all_thread_call_wrappers(Node *node, OutputBuffer *output) {
-  if (node->type != NODE_PROGRAM)
+static void emit_all_process_call_wrappers(Node *node, OutputBuffer *output) {
+  if (!node)
     return;
-  int wrapper_id = 1;
-  for (int i = 0; i < node->body.program.statement_count; i++) {
-    Node *stmt = node->body.program.statements[i];
-    if (stmt->type == NODE_FUNCTION_CALL &&
-        stmt->body.function_call.type == PARALLEL_TYPE_THREAD) {
-      emit_thread_call_wrapper(stmt, NULL, wrapper_id, output, node);
-      wrapper_id++;
+
+  switch (node->type) {
+  case NODE_PROGRAM:
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      emit_all_process_call_wrappers(node->body.program.statements[i], output);
     }
-    if (stmt->type == NODE_VAR_DECLARATION &&
-        stmt->body.var_declaration.variable_parallel_type ==
-            PARALLEL_TYPE_THREAD) {
-      const char *result_var = stmt->body.var_declaration.variable_name;
-      emit_thread_call_wrapper(stmt->body.var_declaration.variable_value,
-                               result_var, wrapper_id, output, node);
-      wrapper_id++;
+    break;
+  case NODE_BLOCK:
+    for (int i = 0; i < node->body.block.statement_count; i++) {
+      emit_all_process_call_wrappers(node->body.block.statements[i], output);
     }
-    if (stmt->type == NODE_THREAD) {
-      output_appendf(output, "void* thread_call_%d(void* arg) {", wrapper_id);
-      for (int j = 0; j < stmt->body.thread.statement_count; j++) {
-        emit_statement(stmt->body.thread.statements[j], output, NULL);
+    break;
+  case NODE_FUNCTION:
+    for (int i = 0; i < node->body.function.statement_count; i++) {
+      emit_all_process_call_wrappers(node->body.function.statements[i], output);
+    }
+    break;
+  case NODE_IF_STATEMENT:
+    emit_all_process_call_wrappers(node->body.if_statement.then_branch, output);
+    if (node->body.if_statement.else_branch) {
+      emit_all_process_call_wrappers(node->body.if_statement.else_branch, output);
+    }
+    break;
+  case NODE_FOR_LOOP:
+    emit_all_process_call_wrappers(node->body.for_loop.body, output);
+    break;
+  case NODE_VAR_DECLARATION:
+    if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_PROCESS) {
+      int pid = node->body.var_declaration.process_id;
+      Node *call_node = node->body.var_declaration.variable_value;
+      const char *function_name = call_node->body.function_call.name;
+      int argc = call_node->body.function_call.argument_count;
+
+      output_appendf(output, "void process_call_%d(int* result) {", pid);
+      output_append(output, "*result=");
+      output_append(output, function_name);
+      output_append(output, "(");
+      for (int j = 0; j < argc; j++) {
+        emit_expression(call_node->body.function_call.arguments[j], output);
+        if (j < argc - 1)
+          output_append(output, ", ");
       }
-      output_append(output, "return NULL;}\n");
-      wrapper_id++;
+      output_append(output, ");");
+      output_append(output, "exit(0);}\n");
     }
-  }
-}
-
-static void emit_all_thread_call_inlines(Node *node, OutputBuffer *output) {
-  if (node->type != NODE_PROGRAM)
-    return;
-  int wrapper_id = 1;
-  for (int i = 0; i < node->body.program.statement_count; i++) {
-    Node *stmt = node->body.program.statements[i];
-    if (stmt->type == NODE_FUNCTION_CALL &&
-        stmt->body.function_call.type == PARALLEL_TYPE_THREAD) {
-      char handle[32];
-      snprintf(handle, sizeof(handle), "_t%d", wrapper_id);
-      emit_thread_call_inline(stmt, handle, wrapper_id, output);
-      wrapper_id++;
-    }
-    if (stmt->type == NODE_VAR_DECLARATION &&
-        stmt->body.var_declaration.variable_parallel_type ==
-            PARALLEL_TYPE_THREAD) {
-      const char *result_var = stmt->body.var_declaration.variable_name;
-      emit_thread_call_inline(stmt->body.var_declaration.variable_value,
-                              result_var, wrapper_id, output);
-      wrapper_id++;
-    }
-    if (stmt->type == NODE_THREAD) {
-      output_appendf(output,
-                 "pthread_t _thread__t%d;pthread_create(&_thread__t%d,NULL,"
-                 "thread_call_%d,NULL);",
-                 wrapper_id, wrapper_id, wrapper_id);
-      wrapper_id++;
-    }
+    break;
+  default:
+    break;
   }
 }
 
@@ -315,6 +415,27 @@ static void emit_function_call(Node *node, OutputBuffer *output) {
   const char *function_name = node->body.function_call.name;
 
   if (node->body.function_call.type == PARALLEL_TYPE_THREAD) {
+    int wid = node->body.function_call.wrapper_id;
+    int argc = node->body.function_call.argument_count;
+
+    if (argc > 0) {
+      output_appendf(output, "intptr_t _args_tw_%d[%d]={", wid, argc);
+      for (int i = 0; i < argc; i++) {
+        emit_expression(node->body.function_call.arguments[i], output);
+        if (i < argc - 1)
+          output_append(output, ", ");
+      }
+      output_append(output, "};");
+    }
+    output_appendf(output, "pthread_t _thread_tw_%d;", wid);
+    output_appendf(output, "pthread_create(&_thread_tw_%d,NULL,thread_call_%d,",
+               wid, wid);
+    if (argc > 0) {
+      output_appendf(output, "_args_tw_%d);", wid);
+    } else {
+      output_append(output, "NULL);");
+    }
+    output_appendf(output, "pthread_join(_thread_tw_%d, NULL);", wid);
     return;
   }
 
@@ -511,6 +632,32 @@ static void emit_threaded_for_loop_worker(Node *node, OutputBuffer *output) {
   }
 }
 
+static void collect_shared_vars(Node *node, OutputBuffer *output) {
+  if (!node)
+    return;
+
+  switch (node->type) {
+  case NODE_PROGRAM:
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      collect_shared_vars(node->body.program.statements[i], output);
+    }
+    break;
+  case NODE_BLOCK:
+    for (int i = 0; i < node->body.block.statement_count; i++) {
+      collect_shared_vars(node->body.block.statements[i], output);
+    }
+    break;
+  case NODE_VAR_DECLARATION:
+    if (node->body.var_declaration.is_shared) {
+      output_appendf(output, "pthread_mutex_t lock_%s;\n",
+                 node->body.var_declaration.variable_name);
+    }
+    break;
+  default:
+    break;
+  }
+}
+
 static void emit_statement(Node *node, OutputBuffer *output, Node *program_node) {
   switch (node->type) {
   case NODE_IF_STATEMENT: {
@@ -547,11 +694,33 @@ static void emit_statement(Node *node, OutputBuffer *output, Node *program_node)
   case NODE_VAR_DECLARATION: {
     const char *var_name = node->body.var_declaration.variable_name;
 
-    if (node->body.var_declaration.variable_parallel_type ==
-            PARALLEL_TYPE_THREAD ||
-        node->body.var_declaration.variable_parallel_type ==
-            PARALLEL_TYPE_PROCESS) {
-      /* Handled by emit_all_thread_call_inlines */
+    if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_THREAD) {
+      int wid = node->body.var_declaration.wrapper_id;
+      Node *call_node = node->body.var_declaration.variable_value;
+      int argc = call_node->body.function_call.argument_count;
+      const char *ctype = c_type(node->body.var_declaration.variable_type);
+
+      output_appendf(output, "%s %s;", ctype, var_name);
+      output_appendf(output, "intptr_t _args_tw_%d[%d]={(intptr_t)&%s,", wid, argc + 1, var_name);
+      for (int i = 0; i < argc; i++) {
+        emit_expression(call_node->body.function_call.arguments[i], output);
+        if (i < argc - 1)
+          output_append(output, ", ");
+      }
+      output_append(output, "};");
+      output_appendf(output, "pthread_t _thread_%s;", var_name);
+      output_appendf(output, "pthread_create(&_thread_%s,NULL,thread_call_%d,_args_tw_%d);",
+                 var_name, wid, wid);
+    } else if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_PROCESS) {
+      int pid = node->body.var_declaration.process_id;
+      const char *ctype = c_type(node->body.var_declaration.variable_type);
+
+      output_appendf(output, "%s %s = 0; int* %s_ptr = mmap(NULL, sizeof(int), "
+                     "PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); "
+                     "*%s_ptr = 0; pid_t _process_%s = fork(); "
+                     "if (_process_%s == 0) { process_call_%d(%s_ptr); } ",
+                     ctype, var_name, var_name, var_name, var_name, var_name, pid, var_name);
+      output_appendf(output, "pthread_t _thread_%s;", var_name);
     } else {
       output_append(output, c_type(node->body.var_declaration.variable_type));
       output_append(output, " ");
@@ -722,7 +891,15 @@ static void emit_statement(Node *node, OutputBuffer *output, Node *program_node)
 
   case NODE_FUNCTION_CALL: {
     emit_function_call(node, output);
-    output_append(output, ";");
+    break;
+  }
+
+  case NODE_THREAD: {
+    int wid = node->body.thread.wrapper_id;
+    output_appendf(output, "pthread_t _thread_tw_%d;", wid);
+    output_appendf(output, "pthread_create(&_thread_tw_%d,NULL,thread_call_%d,NULL);",
+               wid, wid);
+    output_appendf(output, "pthread_join(_thread_tw_%d, NULL);", wid);
     break;
   }
 
@@ -730,7 +907,7 @@ static void emit_statement(Node *node, OutputBuffer *output, Node *program_node)
     for (int i = 0; i < node->body.thread.statement_count; i++) {
       Node *id_node = (Node *)node->body.thread.statements[i];
       const char *name = id_node->body.identifier.name;
-      if (is_process_variable(program_node, name)) {
+      if (is_process_variable(name)) {
         output_appendf(output, "waitpid(_process_%s, NULL, 0); %s = *%s_ptr;", name,
                    name, name);
       } else {
@@ -745,9 +922,118 @@ static void emit_statement(Node *node, OutputBuffer *output, Node *program_node)
   }
 }
 
+static void emit_statement_shared_mutex_init(Node *node, OutputBuffer *output) {
+  if (!node)
+    return;
+
+  switch (node->type) {
+  case NODE_PROGRAM:
+    for (int i = 0; i < node->body.program.statement_count; i++) {
+      emit_statement_shared_mutex_init(node->body.program.statements[i], output);
+    }
+    break;
+  case NODE_BLOCK:
+    for (int i = 0; i < node->body.block.statement_count; i++) {
+      emit_statement_shared_mutex_init(node->body.block.statements[i], output);
+    }
+    break;
+  case NODE_FUNCTION:
+    for (int i = 0; i < node->body.function.statement_count; i++) {
+      emit_statement_shared_mutex_init(node->body.function.statements[i], output);
+    }
+    break;
+  case NODE_IF_STATEMENT:
+    emit_statement_shared_mutex_init(node->body.if_statement.then_branch, output);
+    if (node->body.if_statement.else_branch) {
+      emit_statement_shared_mutex_init(node->body.if_statement.else_branch, output);
+    }
+    break;
+  case NODE_FOR_LOOP:
+    emit_statement_shared_mutex_init(node->body.for_loop.body, output);
+    break;
+  case NODE_VAR_DECLARATION:
+    if (node->body.var_declaration.is_shared) {
+      output_appendf(output, "pthread_mutex_init(&lock_%s, NULL);\n",
+                 node->body.var_declaration.variable_name);
+    }
+    break;
+  default:
+    break;
+  }
+}
+
+static int is_parallel_stmt(Node *stmt) {
+  if (stmt->type == NODE_FUNCTION_CALL &&
+      (stmt->body.function_call.type == PARALLEL_TYPE_THREAD ||
+       stmt->body.function_call.type == PARALLEL_TYPE_PROCESS))
+    return 1;
+  if (stmt->type == NODE_VAR_DECLARATION &&
+      (stmt->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_THREAD ||
+       stmt->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_PROCESS))
+    return 1;
+  if (stmt->type == NODE_THREAD)
+    return 1;
+  if (stmt->type == NODE_AWAIT)
+    return 1;
+  return 0;
+}
+
+static void emit_wrapper_forward_decls(Node *node, OutputBuffer *output) {
+  if (!node)
+    return;
+
+  switch (node->type) {
+  case NODE_PROGRAM:
+    for (int i = 0; i < node->body.program.statement_count; i++)
+      emit_wrapper_forward_decls(node->body.program.statements[i], output);
+    break;
+  case NODE_BLOCK:
+    for (int i = 0; i < node->body.block.statement_count; i++)
+      emit_wrapper_forward_decls(node->body.block.statements[i], output);
+    break;
+  case NODE_FUNCTION:
+    for (int i = 0; i < node->body.function.statement_count; i++)
+      emit_wrapper_forward_decls(node->body.function.statements[i], output);
+    break;
+  case NODE_IF_STATEMENT:
+    emit_wrapper_forward_decls(node->body.if_statement.then_branch, output);
+    if (node->body.if_statement.else_branch)
+      emit_wrapper_forward_decls(node->body.if_statement.else_branch, output);
+    break;
+  case NODE_FOR_LOOP:
+    emit_wrapper_forward_decls(node->body.for_loop.body, output);
+    break;
+  case NODE_VAR_DECLARATION:
+    if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_THREAD) {
+      output_appendf(output, "void* thread_call_%d(void*);\n",
+                     node->body.var_declaration.wrapper_id);
+    }
+    if (node->body.var_declaration.variable_parallel_type == PARALLEL_TYPE_PROCESS) {
+      output_appendf(output, "void process_call_%d(int*);\n",
+                     node->body.var_declaration.process_id);
+    }
+    break;
+  case NODE_FUNCTION_CALL:
+    if (node->body.function_call.type == PARALLEL_TYPE_THREAD) {
+      output_appendf(output, "void* thread_call_%d(void*);\n",
+                     node->body.function_call.wrapper_id);
+    }
+    break;
+  case NODE_THREAD:
+    output_appendf(output, "void* thread_call_%d(void*);\n",
+                   node->body.thread.wrapper_id);
+    break;
+  default:
+    break;
+  }
+}
+
 static void emit_program(Node *node, OutputBuffer *output) {
   if (node->type != NODE_PROGRAM)
     return;
+
+  reset_parallel_ids();
+  assign_parallel_ids(node);
 
   output_append(output,
             "#include <stdlib.h>\n"
@@ -761,25 +1047,9 @@ static void emit_program(Node *node, OutputBuffer *output) {
   for (int i = 0; i < node->body.program.statement_count; i++) {
     Node *stmt = node->body.program.statements[i];
     if (stmt->type == NODE_VAR_DECLARATION &&
-        (stmt->body.var_declaration.variable_parallel_type ==
-             PARALLEL_TYPE_THREAD ||
-         stmt->body.var_declaration.variable_parallel_type ==
-             PARALLEL_TYPE_PROCESS)) {
-      const char *name = stmt->body.var_declaration.variable_name;
-      output_appendf(output, "%s %s = 0;\n",
-                 c_type(stmt->body.var_declaration.variable_type), name);
-      if (stmt->body.var_declaration.variable_parallel_type ==
-          PARALLEL_TYPE_PROCESS) {
-        output_appendf(output, "int* %s_ptr;\n", name);
-      }
-    }
-  }
-
-  for (int i = 0; i < node->body.program.statement_count; i++) {
-    Node *stmt = node->body.program.statements[i];
-    if (stmt->type == NODE_VAR_DECLARATION &&
         stmt->body.var_declaration.variable_parallel_type ==
-            PARALLEL_TYPE_REGULAR) {
+            PARALLEL_TYPE_REGULAR &&
+        stmt->body.var_declaration.is_shared) {
       output_appendf(output, "%s %s = ", c_type(stmt->body.var_declaration.variable_type),
                  stmt->body.var_declaration.variable_name);
       emit_expression(stmt->body.var_declaration.variable_value, output);
@@ -787,17 +1057,12 @@ static void emit_program(Node *node, OutputBuffer *output) {
     }
   }
 
-  for (int i = 0; i < node->body.program.statement_count; i++) {
-    Node *stmt = node->body.program.statements[i];
-    if (stmt->type == NODE_VAR_DECLARATION &&
-        stmt->body.var_declaration.is_shared) {
-      output_appendf(output, "pthread_mutex_t lock_%s;\n",
-                 stmt->body.var_declaration.variable_name);
-    }
-  }
+  collect_shared_vars(node, output);
 
   threaded_worker_counter = 1;
   emit_threaded_for_loop_worker(node, output);
+
+  emit_wrapper_forward_decls(node, output);
 
   for (int i = 0; i < node->body.program.statement_count; i++) {
     Node *stmt = node->body.program.statements[i];
@@ -807,93 +1072,38 @@ static void emit_program(Node *node, OutputBuffer *output) {
     }
   }
 
-  emit_all_thread_call_wrappers(node, output);
+  emit_all_thread_call_wrappers(node, output, node);
 
-  {
-    int process_id = 1;
-    for (int i = 0; i < node->body.program.statement_count; i++) {
-      Node *stmt = node->body.program.statements[i];
-      if (stmt->type == NODE_VAR_DECLARATION &&
-          stmt->body.var_declaration.variable_parallel_type ==
-              PARALLEL_TYPE_PROCESS) {
-        Node *call = stmt->body.var_declaration.variable_value;
-        const char *function_name = call->body.function_call.name;
-        int argc = call->body.function_call.argument_count;
-
-        output_appendf(output, "void process_call_%d(int* result) {", process_id);
-        output_append(output, "*result=");
-        output_append(output, function_name);
-        output_append(output, "(");
-        for (int j = 0; j < argc; j++) {
-          emit_expression(call->body.function_call.arguments[j], output);
-          if (j < argc - 1)
-            output_append(output, ", ");
-        }
-        output_append(output, ");");
-        output_append(output, "exit(0);}\n");
-        process_id++;
-      }
-    }
-  }
+  emit_all_process_call_wrappers(node, output);
 
   output_append(output, "int main() {\n");
+
+  emit_statement_shared_mutex_init(node, output);
 
   for (int i = 0; i < node->body.program.statement_count; i++) {
     Node *stmt = node->body.program.statements[i];
     if (stmt->type == NODE_VAR_DECLARATION &&
-        stmt->body.var_declaration.is_shared) {
-      output_appendf(output, "pthread_mutex_init(&lock_%s, NULL);\n",
+        stmt->body.var_declaration.variable_parallel_type ==
+            PARALLEL_TYPE_REGULAR &&
+        !stmt->body.var_declaration.is_shared) {
+      output_appendf(output, "%s %s = ", c_type(stmt->body.var_declaration.variable_type),
                  stmt->body.var_declaration.variable_name);
-    }
-  }
-
-  threaded_worker_counter = 1;
-
-  {
-    int process_id = 1;
-    for (int i = 0; i < node->body.program.statement_count; i++) {
-      Node *stmt = node->body.program.statements[i];
-      if (stmt->type == NODE_VAR_DECLARATION &&
-          stmt->body.var_declaration.variable_parallel_type ==
-              PARALLEL_TYPE_PROCESS) {
-        const char *name = stmt->body.var_declaration.variable_name;
-        output_appendf(
-            output,
-            "%s_ptr = mmap(NULL, sizeof(int), "
-            "PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); "
-            "*%s_ptr = 0; pid_t _process_%s = fork(); "
-            "if (_process_%s == 0) { process_call_%d(%s_ptr); } ",
-            name, name, name, name, process_id, name);
-        output_appendf(output, "pthread_t _thread_%s;", name);
-        process_id++;
-      }
-    }
-  }
-
-  emit_all_thread_call_inlines(node, output);
-
-  {
-    int unnamed_count = 0;
-    for (int i = 0; i < node->body.program.statement_count; i++) {
-      Node *stmt = node->body.program.statements[i];
-      if ((stmt->type == NODE_FUNCTION_CALL &&
-           stmt->body.function_call.type == PARALLEL_TYPE_THREAD) ||
-          stmt->type == NODE_THREAD) {
-        unnamed_count++;
-      }
-    }
-    for (int i = 1; i <= unnamed_count; i++) {
-      output_appendf(output, "pthread_join(_thread__t%d, NULL);", i);
+      emit_expression(stmt->body.var_declaration.variable_value, output);
+      output_append(output, ";");
     }
   }
 
   for (int i = 0; i < node->body.program.statement_count; i++) {
     Node *stmt = node->body.program.statements[i];
-    if (stmt->type == NODE_FUNCTION || stmt->type == NODE_VAR_DECLARATION ||
-        (stmt->type == NODE_FUNCTION_CALL &&
-         (stmt->body.function_call.type == PARALLEL_TYPE_THREAD ||
-          stmt->body.function_call.type == PARALLEL_TYPE_PROCESS)) ||
-        stmt->type == NODE_THREAD) {
+    if (is_parallel_stmt(stmt)) {
+      emit_statement(stmt, output, node);
+    }
+  }
+
+  for (int i = 0; i < node->body.program.statement_count; i++) {
+    Node *stmt = node->body.program.statements[i];
+    if (stmt->type == NODE_FUNCTION || is_parallel_stmt(stmt) ||
+        stmt->type == NODE_VAR_DECLARATION) {
       continue;
     }
     emit_statement(stmt, output, node);

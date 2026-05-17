@@ -53,6 +53,8 @@ typedef struct Node {
       char *variable_name;
       struct Node *variable_value;
       int is_shared;
+      int wrapper_id;
+      int process_id;
     } var_declaration;
     struct {
       char *variable_name;
@@ -98,6 +100,7 @@ typedef struct Node {
       char *name;
       struct Node **arguments;
       int argument_count;
+      int wrapper_id;
     } function_call;
     struct {
       TokenType operator_type;
@@ -122,6 +125,7 @@ typedef struct Node {
       char *name;
       struct Node **statements;
       int statement_count;
+      int wrapper_id;
     } thread;
   } body;
 } Node;
