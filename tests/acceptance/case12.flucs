@@ -1,0 +1,10 @@
+int counter = 0;
+
+if (1) {
+    thread {
+        counter += 10;
+        counter += 20;
+    }
+}
+
+print(counter);

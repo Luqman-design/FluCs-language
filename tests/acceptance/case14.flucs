@@ -1,0 +1,13 @@
+func int add(int a, int b) {
+    return a + b;
+}
+
+int total = 0;
+
+for (int i = 0; i < 3; i++) {
+    int r = process add(10, 5);
+    await { r };
+    total += r;
+}
+
+print(total);

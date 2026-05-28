@@ -1,0 +1,12 @@
+int result = 0;
+
+func void add(int a, int b) {
+    result += a+b;
+}
+
+thread add(4, 7);
+thread add(20, 13);
+
+print(result);
+
+

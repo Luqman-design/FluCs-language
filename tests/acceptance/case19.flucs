@@ -1,0 +1,15 @@
+func int mul(int a, int b) {
+    return a * b;
+}
+
+int total = 0;
+
+if (1) {
+    int a = 7;
+    int b = 6;
+    int r = process mul(a, b);
+    await { r };
+    total = r;
+}
+
+print(total);

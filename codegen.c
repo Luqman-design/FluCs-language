@@ -435,7 +435,7 @@ static void emit_function_call(Node *node, OutputBuffer *output) {
     } else {
       output_append(output, "NULL);");
     }
-    output_appendf(output, "pthread_join(_thread_tw_%d, NULL);", wid);
+    output_appendf(output, "pthread_join(_thread_tw_%d,NULL);", wid);
     return;
   }
 
@@ -731,10 +731,9 @@ static void emit_statement(Node *node, OutputBuffer *output, Node *program_node)
       output_appendf(output, "%s %s = 0; int* %s_ptr = mmap(NULL, sizeof(int), "
                      "PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); "
                      "*%s_ptr = 0; pid_t _process_%s = fork(); "
-                     "if (_process_%s == 0) { process_call_%d(%s_ptr, %s); } "
-                     "pthread_t _thread_%s;",
+                     "if (_process_%s == 0) { process_call_%d(%s_ptr, %s); }",
                      ctype, var_name, var_name, var_name, var_name, var_name, pid,
-                     var_name, argc > 0 ? args_name : "NULL", var_name);
+                     var_name, argc > 0 ? args_name : "NULL");
     } else {
       output_append(output, c_type(node->body.var_declaration.variable_type));
       output_append(output, " ");
@@ -913,7 +912,7 @@ static void emit_statement(Node *node, OutputBuffer *output, Node *program_node)
     output_appendf(output, "pthread_t _thread_tw_%d;", wid);
     output_appendf(output, "pthread_create(&_thread_tw_%d,NULL,thread_call_%d,NULL);",
                wid, wid);
-    output_appendf(output, "pthread_join(_thread_tw_%d, NULL);", wid);
+    output_appendf(output, "pthread_join(_thread_tw_%d,NULL);", wid);
     break;
   }
 
