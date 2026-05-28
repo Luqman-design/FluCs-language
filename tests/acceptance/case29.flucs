@@ -1,0 +1,7 @@
+func int multiply(int a, int b) {
+    return a * b;
+}
+
+int r = process multiply(6, 7);
+await { r };
+print(r);

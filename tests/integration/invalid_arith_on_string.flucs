@@ -1,0 +1,2 @@
+string s = "hi";
+int r = s + 1;

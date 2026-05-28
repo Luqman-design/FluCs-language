@@ -1,0 +1,11 @@
+int sum = 0;
+
+func void acc(int n) {
+    sum += n;
+}
+
+thread acc(10);
+thread acc(20);
+thread acc(30);
+
+print(sum);

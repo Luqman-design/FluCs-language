@@ -1,0 +1,6 @@
+func int square(int x) {
+    return x * x;
+}
+
+int r = square(7);
+print(r);

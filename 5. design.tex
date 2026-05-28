@@ -1,0 +1,287 @@
+\chapter{Language design}
+\label{ch:languagedesign}
+This chapter presents the design of FluCs, with emphasis on its syntax and concurrency model. It defines the core language constructs through an informal description, an Extended Backus-Naur Form (EBNF) and selected semantic rules.
+\section{Informal Language Definition}
+FluCs is a statically typed imperative language extended with explicit concurrency primitives. It provides a minimal imperative core, including variables, control flow, functions, and expressions, while its main contribution is a built-in model for thread- and process-based parallel execution.
+\subsection{Program Example}
+The code snippet below shows a small example written in FluCs. The example demonstrates variable declarations, functions, loops, and the built-in concurrency and parallelism constructs of the language.
+\begin{lstlisting}
+int total = 0;
+string start = "Program has started executing";
+
+print(start);
+
+func int multiply(int a, int b) {
+    return a * b;
+}
+thread=4 for (int i = 1; i < 40; i++) {
+    total = total + i;
+}
+thread {
+  total = total / 2;
+}
+
+if (total >= 100) {
+    print("Total is greater or equal to 100");
+} else {
+    print("Total is smaller than 100");
+}
+int threadedResult = thread multiply(4, 5);
+int processResult = process multiply(2, 10);
+await { threadedResult, processResult };
+
+print(threadedResult);
+print(processResult);
+\end{lstlisting}
+\subsection{Keywords}
+FluCs contains 22 reserved keywords that cannot be used as identifiers. These keywords were selected to preserve readability and syntactic clarity. Keywords such as \texttt{thread}, \texttt{process}, and \texttt{await} are central to the language's concurrency and parallel model, while others like \texttt{func}, \texttt{if}, \texttt{for}, and \texttt{return} provide standard imperative constructs. The limited number of keywords was a deliberate design choice to keep the language simple and easy to learn.
+\subsection{Types}
+FluCs is a statically typed language supporting two primitive data types: \texttt{int} for integer values and \texttt{string} for text. The decision to support only these two types was made to keep the language minimal while still being sufficiently expressive for its intended use cases. Type checking is performed during semantic analysis to detect mismatches and ensure program correctness.
+\subsection{Variables}
+Variables must be declared with an explicit type before use, following the form \texttt{type name = value}. FluCs uses lexical scoping, meaning a variable is visible from its declaration until the end of the enclosing block. During semantic analysis, the compiler automatically detects variables that are used across multiple threads and marks them as shared for thread-safe code generation. This is explained in chapter \ref{subch:Thread_safety}. This automatic detection relieves the programmer from manual synchronization annotations while still ensuring correctness in concurrent programs.
+\subsection{Scopes}
+FluCs employs block-structured lexical scoping. Each pair of curly braces \texttt{\{\}} defines a new scope. Variables declared inside a function or block are local to that scope. This design promotes encapsulation and prevents unintended variable access across different parts of the program, which is particularly important when working with concurrent constructs.
+\subsection{Functions}
+Functions are declared using the \texttt{func} keyword, followed by a return type, function name, and a list of parameters. The function body is enclosed in curly braces. Functions support recursion and can return \texttt{int}, \texttt{string}, or use \texttt{void} for procedures without a return value. An example of a function definition is shown in the program example above.
+\subsection{Control Structures}
+FluCs provides standard control structures for imperative programming. As for selective control structures, the language supports the \texttt{if} statement, which may optionally be followed by an \texttt{else} branch. As for iterative control structures, the language includes the \texttt{for} loop, consisting of an initializer, a condition, and an update expression.
+\subsection{Concurrency and Parallelism Model}
+FluCs integrates concurrency directly into the language syntax. The main mechanisms are:
+\begin{itemize}
+    \item \textbf{Thread blocks}: The \texttt{thread} keyword followed by a block \texttt{\{ \dots \}} creates and executes statements in a separate thread.
+    \item \textbf{Threaded for loop}: The \texttt{thread=N for ...} construct allows parallel execution of \texttt{for} loops by distributing iterations across multiple threads.
+    \item \textbf{Function prefixing}: A function call with \texttt{thread} or \texttt{process} executes the function in a parallel thread or separate process (assuming it's a multi-core CPU).
+    \item \textbf{Synchronization}: The \texttt{await} statement waits for one or more operations to complete.
+\end{itemize}
+\subsection{Syntax} \label{subch:Syntax}
+Just as natural languages like English rely on grammatical rules to form valid sentences, programming languages require a precise syntactic definition to determine which programs are structurally correct. A grammar provides these rules in a formal way. FluCs is defined using the Extended Backus-Naur Form (EBNF), which is a readable notation that extends traditional BNF with operators for repetition (*) and optionality (?) \cite{sipser2013}.
+The complete syntax of FluCs is defined by the following EBNF grammar:
+\subsubsection{Program Structure}
+\begin{align*}
+Program &::= Statement^*
+\end{align*}
+\subsubsection{Statements}
+\begin{align*}
+Statement &::= VarDeclaration \mid VarUpdate \mid PrintStatement \mid IfStatement \mid \\
+&\quad ForLoop \mid FunctionDeclaration \mid FunctionCall \mid \\
+&\quad ReturnStatement \mid ThreadBlock \mid AwaitStatement
+\end{align*}
+\subsubsection{Variable Declarations and Updates}
+\begin{align*}
+VarDeclaration &::= Type\ ID\ "="\ Expression\ ";" \mid \\
+&\quad Type\ ID\ "="\ ThreadedCall\ ";" \mid \\
+&\quad Type\ ID\ "="\ ProcessCall\ ";"
+\end{align*}
+\begin{align*}
+Type &::= \texttt{int} \mid \texttt{string}
+\end{align*}
+\begin{align*}
+VarUpdate &::= ID\ "="\ Expression\ ";" \mid ID\ "++"\ ";" \mid ID\ "--"\ ";"
+\end{align*}
+\subsubsection{Functions}
+\begin{align*}
+FunctionDeclaration &::= \texttt{func}\ Type\ ID\ "(" Parameters ")"\ Block
+\end{align*}
+\begin{align*}
+Parameters &::= (\textit{Type}\ ID\ ("," \textit{Type}\ ID)^*)?
+\end{align*}
+\begin{align*}
+Arguments &::= (Expression\ ("," Expression)^*)?
+\end{align*}
+\begin{align*}
+Block &::= "\{"\ Statement^*\ "\}"
+\end{align*}
+\subsubsection{Function Calls}
+\begin{align*}
+FunctionCall &::= ID\ "(" Arguments ")" ";" \\
+ThreadedCall &::= \texttt{thread}\ FunctionCall \\
+ProcessCall &::= \texttt{process}\ FunctionCall
+\end{align*}
+\subsubsection{Control Structures}
+\begin{align*}
+IfStatement &::= \texttt{if}\ "(" Expression ")"\ Block\ (\texttt{else}\ Block)? \\
+ForLoop &::= \texttt{for}\ "(" VarDeclaration ";" Expression ";" VarUpdate ")"\ Block \mid \\
+&\quad \texttt{thread=Integer}\ \texttt{for}\ "(" VarDeclaration ";" Expression ";" VarUpdate ")"\ Block
+\end{align*}
+\subsubsection{Thread Blocks and Synchronization}
+\begin{align*}
+ThreadBlock &::= \texttt{thread} Block \\
+AwaitStatement &::= \texttt{await}\ "\{" IdentifierList "\}" ";"
+\end{align*}
+\begin{align*}
+IdentifierList &::= ID\ ("," ID)^*
+\end{align*}
+\subsubsection{Print and Return Statements}
+\begin{align*}
+PrintStatement &::= \texttt{print}\ "(" Expression ")" ";" \\
+ReturnStatement &::= \texttt{return}\ Expression\ ";"
+\end{align*}
+\subsubsection{Expressions}
+\begin{align*}
+Expression &::= LogicalExpression \\
+LogicalExpression &::= ComparisonExpression\ (("\&\&" \mid "||")\ ComparisonExpression)^* \\
+ComparisonExpression &::= AdditiveExpression\ (CompOp\ AdditiveExpression)^* \\
+AdditiveExpression &::= MultiplicativeExpression\ (("+" \mid "-")\ MultiplicativeExpression)^* \\
+MultiplicativeExpression &::= Primary\ (("*" \mid "/")\ Primary)^* \\
+Primary &::= Integer \mid String \mid ID \mid "(" Expression ")"
+\end{align*}
+\begin{align*}
+CompOp &::= "==" \mid "!=" \mid "<" \mid "<=" \mid ">" \mid ">="
+\end{align*}
+\subsection{Semantics}
+The syntax of FluCs has now been specified. This section formally defines the dynamic semantics of the language using big-step operational semantics (BSS). In big-step semantics, the execution of a statement is described as a single transition from an initial state to a final state. This approach provides a clear and concise specification of the meaning of each language construct.
+
+The semantic judgement takes the form:
+\[
+\langle S, s \rangle \rightarrow s'
+\]
+
+where \( S \) is a statement and \( s \) denotes the current state.
+
+\subsubsection{Environment-Store Model}
+
+The semantics of FluCs is defined using the environment-store model. Formally, the state \( s \) is a pair \( s = (E, \sigma) \), where the environment \( E : \textit{Var} \rightharpoonup \textit{Loc} \) maps variable identifiers to locations, and the store \( \sigma : \textit{Loc} \rightharpoonup \textit{Val} \) maps locations to values. This model supports lexical scoping and variable shadowing, where declarations in inner scopes temporarily hide variables with the same name from outer scopes.
+
+\subsubsection{Variable Declaration}
+Variable declaration in FluCs binds an identifier to a value of a specified type. The declaration creates a new binding in the current environment and updates the store with the evaluated initial value. This construct follows the lexical scoping rules of the language, ensuring that the declared variable is only visible within its enclosing block.
+
+\begin{align*}
+(\text{Dec}_{\text{BS}}) \quad
+&\frac{
+  \langle e, s \rangle \rightarrow v \quad l \notin \text{dom}(\sigma)
+}{
+  \langle \texttt{Type}\ x = e;\ , (E, \sigma) \rangle \rightarrow (E[x \mapsto l],\ \sigma[l \mapsto v])
+}
+\end{align*}
+
+\subsubsection{Assignment}
+Assignment updates the value associated with a previously declared variable. The right-hand side expression is evaluated in the current state, and the resulting value replaces the previous content of the variable in the store. Assignments are only valid for variables that have already been declared, as enforced during semantic analysis.
+
+\begin{align*}
+(\text{Ass}_{\text{BS}}) \quad
+&\frac{
+  \langle e, s \rangle \rightarrow v \quad E(x) = l
+}{
+  \langle x = e;\ , (E, \sigma) \rangle \rightarrow (E,\ \sigma[l \mapsto v])
+}
+\end{align*}
+
+\subsubsection{Selective Control Structures}
+
+The \texttt{if} statement evaluates a condition and executes one of two possible branches depending on the result. The language supports both simple \texttt{if} statements and \texttt{if-else} constructs, allowing conditional execution of code blocks. The condition is evaluated exactly once, and the chosen branch is executed in the current environment and store.
+
+\begin{align*}
+(\text{if-True}_{\text{BS}}) \quad
+&\frac{
+  \langle e, s \rangle \rightarrow \text{true} \quad \langle S_1, s \rangle \rightarrow s'
+}{
+  \langle \texttt{if (}e\texttt{)}\ \{S_1\}\ , s \rangle \rightarrow s'
+}
+\end{align*}
+
+\begin{align*}
+(\text{if-False}_{\text{BS}}) \quad
+&\frac{
+  \langle e, s \rangle \rightarrow \text{false} \quad \langle S_2, s \rangle \rightarrow s'
+}{
+  \langle \texttt{if (}e\texttt{)}\ \{S_1\} \texttt{else} \{S_2\}\ , s \rangle \rightarrow s'
+}
+\end{align*}
+
+\subsubsection{Iterative Control Structures}
+
+The \texttt{for} loop consists of an initialization statement, a loop condition, and an update expression. The loop body is executed repeatedly as long as the condition evaluates to true, with the update expression being applied after each iteration. This construct enables concise expression of repetition and can be used in combination with the threaded for-loop variant.
+
+\begin{align*}
+(\text{for}_{\text{BS}}) \quad
+&\frac{
+  \text{the initialization, condition checking, and update steps control iteration of body } S
+}{
+  \langle \texttt{for (init; cond; update)} \{S\}\ , s \rangle \rightarrow s'
+}
+\end{align*}
+
+\subsubsection{Functions}
+When a function is called, the arguments are evaluated and passed to the function. The statements inside the function body are then executed in a new local scope. A function can return a value or simply perform actions without returning anything.
+
+\noindent Function-1 describes the semantic rule for declaring a function without parameters.
+
+\begin{align*}
+[\text{FuncDecl-1}] \quad
+& \frac{
+  \langle S, s \rangle \rightarrow s'
+}{
+  \langle \texttt{func}\ Type\ id\ ()\ \{S\}\ , s \rangle \rightarrow s'
+}
+\end{align*}
+
+\noindent Function-2 describes the semantic rule for declaring a function with parameters.
+
+\begin{align*}
+[\text{FuncDecl-2}] \quad
+& \frac{
+  \langle S, s \rangle \rightarrow s'
+}{
+  \langle \texttt{func}\ Type\ id\ (P)\ \{S\}\ , s \rangle \rightarrow s'
+}
+\end{align*}
+
+\subsubsection{Arithmetic Operations}
+
+FluCs supports the standard arithmetic operators addition, subtraction, multiplication, and division on integer values. These operations are evaluated strictly from left to right according to standard precedence rules, with parentheses available to override default precedence. All arithmetic expressions are statically type-checked to ensure that operands are of compatible integer type.
+
+\begin{align*}
+(\star_{\text{BS}}) \quad
+&\frac{
+  \langle a_1, s \rangle \rightarrow v_1 \quad \langle a_2, s \rangle \rightarrow v_2
+}{
+  \langle a_1 \star a_2, s \rangle \rightarrow v_1 \star v_2
+}
+\end{align*}
+
+where \(\star \in \{+, -, \cdot, /\}\).
+
+\subsubsection{Thread and Process}
+
+A threaded function call initiates execution of the function in a new thread. The calling context continues immediately, reflecting the non-blocking nature of thread creation:
+\begin{align*}
+[\text{ThreadCall}] \quad
+& \frac{
+  \langle \text{args}, s \rangle \rightarrow v
+}{
+  \langle \texttt{thread}\ id(\text{args}) \ , s \rangle \rightarrow s
+}
+\end{align*}
+
+A process function call spawns the function in a separate operating system process. As with threads, the caller proceeds without blocking:
+
+\begin{align*}
+[\text{ProcessCall}] \quad
+& \frac{
+  \langle \text{args}, s \rangle \rightarrow v
+}{
+  \langle \texttt{process}\ id(\text{args}) \ , s \rangle \rightarrow s
+}
+\end{align*}
+
+A thread block creates and executes a block of statements in a new thread. The parent context continues its execution immediately:
+
+\begin{align*}
+[\text{ThreadBlock}] \quad
+& \frac{
+  \langle S, s \rangle \rightarrow s' \quad \text{(executed in a separate thread)}
+}{
+  \langle \texttt{thread}\ \{S\} \ , s \rangle \rightarrow s
+}
+\end{align*}
+
+The \texttt{await} statement provides completion synchronization by suspending the current context until all specified threads and processes have completed execution. This prevents the parent context from using a result before the associated task has finished:
+
+\begin{align*}
+[\text{Await}] \quad
+& \frac{
+  \text{all referenced threads and processes have completed execution}
+}{
+  \langle \texttt{await}\ \{t_1, t_2, \dots \} \ , s \rangle \rightarrow s
+}
+\end{align*}
